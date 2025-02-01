@@ -1,0 +1,107 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 10px;
+    font-size: 5rem;
+    color: white;
+    width: 100%;
+    height: 100%;
+    background-color: #001f3f;
+    z-index: -1;
+    font-family: 'Arial', sans-serif;
+}
+
+.list-group {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.list-group-item {
+    padding: 10px 15px;
+    margin-bottom: 5px;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.login-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 300px;
+    padding: 20px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.login-box h2 {
+    margin: 0;
+    margin-bottom: 20px;
+    font-size: 3rem;
+    color: #333;
+}
+
+.login-box label {
+    align-self: flex-start;
+    margin-bottom: 5px;
+    font-size: 1rem;
+    color: #333;
+}
+
+.login-box input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #000000;
+    border-radius: 4px;
+}
+
+.login-box .button-container {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.login-box button {
+    width: 40%; /* Adjusted width to fit two buttons side by side */
+    padding: 10px;
+    border-radius: 8px; /* Curved corners */
+    background-color: #001f3f; /* Dark blue background */
+    color: white;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 0 1%; /* Add margin to keep space between buttons */
+}
+
+.login-box button:hover {
+    background-color: #000a1a; /* Darker blue on hover */
+}
+
+.login-box .register-button {
+    width: 30%; /* Smaller width for the register button */
+}
+
+.list-group-item:hover {
+    background-color: #e9ecef;
+    cursor: pointer;
+}
+
+.list-group-item.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
