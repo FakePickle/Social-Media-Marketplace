@@ -10,6 +10,10 @@ function FindPeople() {
         setSearchTerm(event.target.value);
     };
 
+    const handleProfileClick = () => {
+        navigate('/');
+    };
+
     return (
         <div className="chat-app">
             <div className="left-sidebar">
@@ -21,11 +25,9 @@ function FindPeople() {
                 </div>
                 <div className="sidebar-footer">
                     
-                    <div className="sidebar-icon">
-                        &#x2699; <span className="icon-label">Settings</span>
+                    <div className="sidebar-icon">&#x2699; <span className="icon-label">Settings</span>
                     </div>
-                    <div className="sidebar-icon">
-                        &#x1F464; <span className="icon-label">Profile</span>
+                    <div className="sidebar-icon" onClick={handleProfileClick}>&#x1F464; <span className="icon-label">Profile</span>
                     </div>
                 </div>
             </div>
