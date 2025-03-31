@@ -13,7 +13,7 @@ const Home = () => {
     <div style={{backgroundColor:"#1B263B", overflow: "hidden"}}>
       <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} expanded={expanded} setExpanded={setExpanded} />
       <TopNav />
-      <div style={{ marginLeft: expanded ? "90px" : "175px", marginTop: "47px", padding: "20px", backgroundColor: "#1B263B", height: "90vh", transition: "margin-left 0.3s ease-in-out" }}>
+      <div style={{ marginLeft: expanded ? "90px" : "175px", marginTop: "47px", padding: "20px", backgroundColor: "#1B263B", height:"92vh", transition: "margin-left 0.3s ease-in-out" }}>
         {currentTab === "Messages" && <Chats />}
         {currentTab === "Search" && <Search />}
         {currentTab === "Marketplace" && <Marketplace />}
