@@ -7,27 +7,6 @@ key = Fernet.generate_key()
 cipher = Fernet(key)
 
 
-class Message(models.Model):
-    sender = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="sent_messages"
-    )
-    receiver = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="received_messages"
-    )
-    content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    def encrypt_message(self):
-        self.content = cipher.encrypt(self.content.encode()).decode()
-
-    def decrypt_message(self):
-        return cipher.decrypt(self.content.encode()).decode()
-
-    def save(self, *args, **kwargs):
-        self.encrypt_message()
-        super().save(*args, **kwargs)
-
-
 class CustomUser(AbstractUser):
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)
@@ -55,3 +34,24 @@ class CustomUser(AbstractUser):
     def generate_keys(self):
         # Generate public and private keys for encryption
         pass
+
+
+class Message(models.Model):
+    sender = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="sent_messages"
+    )
+    receiver = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="received_messages"
+    )
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def encrypt_message(self):
+        self.content = cipher.encrypt(self.content.encode()).decode()
+
+    def decrypt_message(self):
+        return cipher.decrypt(self.content.encode()).decode()
+
+    def save(self, *args, **kwargs):
+        self.encrypt_message()
+        super().save(*args, **kwargs)
