@@ -14,6 +14,7 @@ import {
   IconButton,
   AppBar,
   Toolbar,
+  Divider,
   Fab,
 } from "@mui/material";
 import { Search,  ShoppingCart, RemoveShoppingCart, Add } from "@mui/icons-material";
@@ -25,6 +26,9 @@ const Marketplace = () => {
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("card");
+  const [paymentDetails, setPaymentDetails] = useState({ cardNumber: "", expiry: "", cvv: "", upiId: "" });
   const [products, setProducts] = useState([
   {
     listing_id: 1,
@@ -191,6 +195,11 @@ const handleAddProduct = () => {
   setNewProduct({ title: "", description: "", price: "", image_url: "" });
   setAddModalOpen(false);
 };
+const handleBuyNow = (product) => {
+  setCart([product]); 
+  setPaymentModalOpen(true); 
+};
+
 
 return (
   <div style={{ backgroundColor: "#1B263B", minHeight: "92vh", color: "white", padding: "20px" }}>
@@ -291,9 +300,13 @@ return (
               <Button variant="contained" sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" }, marginRight: "10px" }} onClick={() => addToCart(selectedProduct)}>
                 Add to Cart
               </Button>
-              <Button variant="contained" sx={{ backgroundColor: "#FF9800", "&:hover": { backgroundColor: "#E68900" } }}>
-                Buy Now
-              </Button>
+              <Button
+              variant="contained"
+              sx={{ backgroundColor: "#FF9800", "&:hover": { backgroundColor: "#E68900" } }}
+              onClick={() => handleBuyNow(selectedProduct)}
+            >
+              Buy Now
+            </Button>
             </Box>
 
             <Button onClick={handleCloseModal} sx={{ marginTop: "20px", color: "lightgray", textDecoration: "underline", display: "block", marginLeft: "auto", marginRight: "auto" }}>
@@ -318,15 +331,30 @@ return (
         {cart.length === 0 ? (
           <Typography sx={{ marginTop: "10px" }}>Your cart is empty.</Typography>
         ) : (
-          cart.map((item) => (
-            <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-              <Typography>{item.title} - ${item.price}</Typography>
-              <IconButton onClick={() => removeFromCart(item.listing_id)} sx={{ color: "red" }}>
-                <RemoveShoppingCart />
-              </IconButton>
+          <>
+            {cart.map((item) => (
+              <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+                <Typography>{item.title} - ${item.price}</Typography>
+                <IconButton onClick={() => removeFromCart(item.listing_id)} sx={{ color: "red" }}>
+                  <RemoveShoppingCart />
+                </IconButton>
+              </Box>
+            ))}
+            <Box sx={{ textAlign: "center", marginTop: "20px" }}>
+              <Button
+                variant="contained"
+                sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" } }}
+                onClick={() => {
+                  setCartOpen(false);
+                  setPaymentModalOpen(true);
+                }}
+              >
+                Proceed to Checkout
+              </Button>
             </Box>
-          ))
+          </>
         )}
+
       </Box>
     </Modal>
     <Modal open={addModalOpen} onClose={() => setAddModalOpen(false)}>
@@ -400,6 +428,108 @@ return (
       >
         <Add />
       </Fab>
+      <Modal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)}>
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)", width: 400,
+            backgroundColor: "#1B263B", color: "white",
+            padding: 4, borderRadius: "12px", boxShadow: 24,
+          }}
+        >
+          <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Payment Gateway</Typography>
+          {/* Order Summary */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" fontWeight="bold">Order Summary</Typography>
+            {cart.map((item) => (
+              <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+                <Typography>{item.title}</Typography>
+                <Typography>${item.price}</Typography>
+              </Box>
+            ))}
+            <Divider sx={{ my: 1, borderColor: "gray" }} />
+            <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+              <Typography fontWeight="bold">Total:</Typography>
+              <Typography fontWeight="bold">
+                ${cart.reduce((total, item) => total + parseFloat(item.price), 0).toFixed(2)}
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant={selectedPaymentMethod === "card" ? "contained" : "outlined"}
+              sx={{ mr: 1, backgroundColor: selectedPaymentMethod === "card" ? "#238636" : "transparent", color: "white" }}
+              onClick={() => setSelectedPaymentMethod("card")}
+            >
+              Credit Card
+            </Button>
+            <Button
+              variant={selectedPaymentMethod === "upi" ? "contained" : "outlined"}
+              sx={{ backgroundColor: selectedPaymentMethod === "upi" ? "#238636" : "transparent", color: "white" }}
+              onClick={() => setSelectedPaymentMethod("upi")}
+            >
+              UPI ID
+            </Button>
+          </Box>
+
+          {selectedPaymentMethod === "card" ? (
+            <>
+              <TextField
+                fullWidth
+                label="Card Number"
+                variant="outlined"
+                value={paymentDetails.cardNumber}
+                onChange={(e) => setPaymentDetails({ ...paymentDetails, cardNumber: e.target.value })}
+                sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField
+                  label="Expiry"
+                  variant="outlined"
+                  value={paymentDetails.expiry}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, expiry: e.target.value })}
+                  sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" }, flex: 1 }}
+                />
+                <TextField
+                  label="CVV"
+                  variant="outlined"
+                  value={paymentDetails.cvv}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, cvv: e.target.value })}
+                  sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" }, flex: 1 }}
+                />
+              </Box>
+            </>
+          ) : (
+            <TextField
+              fullWidth
+              label="UPI ID"
+              variant="outlined"
+              value={paymentDetails.upiId}
+              onChange={(e) => setPaymentDetails({ ...paymentDetails, upiId: e.target.value })}
+              sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
+            />
+          )}
+
+          <Box sx={{ textAlign: "center" }}>
+            <Button
+              onClick={() => {
+                alert("Payment successful!");
+                setPaymentModalOpen(false);
+                setOpenModal(false); // Close product modal too
+              }}
+              variant="contained"
+              sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" }, mr: 2 }}
+            >
+              Pay Now
+            </Button>
+            <Button onClick={() => setPaymentModalOpen(false)} sx={{ color: "lightgray" }}>
+              Cancel
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
   </div>
 );
 };
