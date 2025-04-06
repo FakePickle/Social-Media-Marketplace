@@ -11,7 +11,8 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${file}"
+            "program": "${file}",
+            "runtimeArgs": ["--openssl-legacy-provider"]
         }
     ]
 }

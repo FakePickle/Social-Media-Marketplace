@@ -55,7 +55,7 @@ function Chats() {
       {/* Left Sidebar - People List */}
       <div style={{ width: "35vh", backgroundColor: "#1B263B", padding: "15px", display: "flex", flexDirection: "column" }}>
         <Typography variant="h4" gutterBottom color="white">
-          Chats
+          Chats 
         </Typography>
 
         {/* AutoComplete Search Bar */}

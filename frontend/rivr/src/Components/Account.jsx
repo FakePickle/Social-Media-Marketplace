@@ -20,7 +20,7 @@ function Account({ anchorEl, handleClose }) {
         horizontal: "right",
       }}
       sx={{
-        marginLeft: "70px", 
+        marginLeft: "70px",
         "& .MuiPaper-root": {
           backgroundColor: "#415A77",
           color: "#ffffff",
@@ -31,18 +31,48 @@ function Account({ anchorEl, handleClose }) {
         },
       }}
     >
-      <Typography variant="h6" sx={{ color: "#ffffff", fontWeight: "bold" }}>Account Details</Typography>
-      <Typography variant="body1" sx={{ color: "#ccd6f6" }}>Username: admin</Typography>
-      <Typography variant="body1" sx={{ color: "#ccd6f6" }}>Role: User</Typography>
+      <Typography variant="h6" sx={{ color: "#ffffff", fontWeight: "bold", marginBottom: "15px" }}>
+        Account Details
+      </Typography>
+
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
+        <img
+          src="paste the url here..." 
+          alt="Profile"
+          style={{
+            width: "100px",
+            height: "100px",
+            borderRadius: "50%",
+            border: "2px solid #ccd6f6",
+          }}
+        />
+      </div>
+
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "10px" }}>
+        <strong>Username:</strong> admin
+      </Typography>
+
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "20px" }}>
+        <strong>Bio:</strong> This is a public bio. You can update it in your profile settings.
+      </Typography>
+
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "20px" }}>
+        <strong>Role:</strong> User
+      </Typography>
+
       <Button
         variant="contained"
         color="secondary"
         onClick={() => {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
-          window.location.href = "/login";
+          window.location.href = "/auth";
         }}
-        sx={{ marginTop: "10px", backgroundColor: "#e63946", "&:hover": { backgroundColor: "#d62828" } }}
+        sx={{
+          marginTop: "10px",
+          backgroundColor: "#e63946",
+          "&:hover": { backgroundColor: "#d62828" },
+        }}
       >
         Logout
       </Button>
