@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "name": "Rivr",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ],
+  "size": 0.0001239776611328125,
+  "filesCount": 1,
+  "presets": {
+    "requestType": "http",
+    "requestUrl": "{{API_BASE_URL}}"
+  }
+}

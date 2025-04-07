@@ -1,0 +1,72 @@
+auth {
+  mode: none
+}
+
+script:pre-request {
+  console.log('Pre-request script started');
+  
+  try {
+    const axios = require('axios');
+    console.log('Axios loaded');
+  
+    const baseUrl = bru.getEnvVar('API_BASE_URL') || 'http://127.0.0.1:8000/api/';
+    const email = bru.getEnvVar('EMAIL') || 'test@example.com';
+    const password = bru.getEnvVar('PASSWORD') || 'testpassword123';
+  
+    let accessToken = bru.getEnvVar('ACCESS_TOKEN');
+    let refreshToken = bru.getEnvVar('REFRESH_TOKEN');
+    let tokenExpires = parseInt(bru.getEnvVar('TOKEN_EXPIRES'), 10) || 0;
+  
+    async function login() {
+      const response = await axios.post(`${baseUrl}login/`, { email, password });
+      console.log('Login response:', response.data);
+      accessToken = response.data.access;
+      refreshToken = response.data.refresh;
+      tokenExpires = Date.now() + 300000; // 5 minutes
+  
+      bru.setEnvVar('ACCESS_TOKEN', accessToken);
+      bru.setEnvVar('REFRESH_TOKEN', refreshToken);
+      bru.setEnvVar('TOKEN_EXPIRES', tokenExpires.toString());
+      console.log('Set ACCESS_TOKEN:', accessToken);
+      return accessToken;
+    }
+  
+    async function refreshAccessToken() {
+      const response = await axios.post(`${baseUrl}token/refresh/`, { refresh: refreshToken });
+      console.log('Refresh response:', response.data);
+      accessToken = response.data.access;
+      tokenExpires = Date.now() + 300000;
+  
+      bru.setEnvVar('ACCESS_TOKEN', accessToken);
+      bru.setEnvVar('TOKEN_EXPIRES', tokenExpires.toString());
+      console.log('Refreshed ACCESS_TOKEN:', accessToken);
+      return accessToken;
+    }
+  
+    // Check token status
+    console.log('Current ACCESS_TOKEN:', accessToken);
+    console.log('Current REFRESH_TOKEN:', refreshToken);
+    console.log('Current TOKEN_EXPIRES:', tokenExpires);
+    console.log('Current time:', Date.now());
+  
+    if (!accessToken || Date.now() >= tokenExpires) {
+      if (refreshToken) {
+        console.log('Refreshing token...');
+        accessToken = await refreshAccessToken();
+      } else {
+        console.log('Logging in...');
+        accessToken = await login();
+      }
+    }
+  
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+  
+    console.log('Setting Authorization header with:', accessToken);
+    req.setHeader('Authorization', `Bearer ${accessToken}`);
+  } catch (error) {
+    console.error('Error in script:', error.response?.data || error.message);
+    bru.runner.skipRequest();
+  }
+}
