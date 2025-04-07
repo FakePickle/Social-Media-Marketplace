@@ -16,6 +16,7 @@ urlpatterns = [
     path("token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("protected/", ProtectedView.as_view(), name="protected"),
     path("messages/", MessageView.as_view(), name="messages"),
+    path("messages/<int:pk>/", MessageView.as_view(), name="message-detail"),
     path('groups/', GroupCreateView.as_view(), name='create-group'),
     path('groups/<int:pk>/', GroupDetailView.as_view(), name='group-detail'),
     path('groups/<int:pk>/members/', GroupMemberUpdateView.as_view(), name='update-group-members'),

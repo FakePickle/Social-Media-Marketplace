@@ -39,13 +39,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             phone_number=validated_data.get("phone_number", ""),
             bio=validated_data.get("bio", ""),
         )
+        
 
         # Set password and save to get user ID
         user.set_password(validated_data["password"])
         user.save()
 
-        user.generate_keys()
         # Generate TOTP secret for 2FA
+        user.generate_keys()
         user.generate_totp_secret()
 
         # Create OTP verification record
@@ -73,20 +74,28 @@ class OTPVerificationSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
+    sender = serializers.SlugRelatedField(
+        slug_field='username',
+        queryset=CustomUser.objects.all()
+    )
+    receiver = serializers.SlugRelatedField(
+        slug_field='username',
+        queryset=CustomUser.objects.all()
+    )
+
     class Meta:
         model = Message
-        fields = ["id", "sender", "receiver", "content", "timestamp"]
-
+        fields = ["sender", "receiver", "content", "timestamp"]
+    
     def create(self, validated_data):
-        """Create a new message"""
-        sender = validated_data["sender"]
-        receiver = validated_data["receiver"]
-        message = validated_data["content"]
+        sender_user = validated_data["sender"]
+        receiver_user = validated_data["receiver"]
+        plain_text = validated_data["content"]
 
-        # Ensure sender and receiver are valid users
+        # Check if sender and receiver are valid users
         try:
-            sender_user = CustomUser.objects.get(username=sender)
-            receiver_user = CustomUser.objects.get(username=receiver)
+            sender_user = CustomUser.objects.get(email=sender_user)
+            receiver_user = CustomUser.objects.get(email=receiver_user)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("Sender or receiver does not exist.")
 
@@ -101,8 +110,15 @@ class MessageSerializer(serializers.ModelSerializer):
         validated_data["content"] = message
         validated_data["timestamp"] = timezone.now()
 
-        message = Message.objects.create(**validated_data)
-        return message
+        return Message.objects.create(**validated_data)
+
+    
+    def validate(self, attrs):
+        """Ensure sender and receiver are not the same"""
+        print(attrs)
+        if attrs["sender"] == attrs["receiver"]:
+            raise serializers.ValidationError("Sender and receiver cannot be the same.")
+        return attrs
 
 
 class FriendshipSerializer(serializers.Serializer):

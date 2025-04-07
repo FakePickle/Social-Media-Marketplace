@@ -1,6 +1,9 @@
 import base64
 import io
 
+from django.db.models import Q
+
+from django.shortcuts import get_object_or_404
 import qrcode
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
@@ -253,90 +256,129 @@ class MessageView(APIView):
     groupserializer = GroupMessageSerializer
     permission_classes = [AllowAny]
 
-    def get(self):
-        """
-        Limit the messages to those sent or received by the current user.
-        """
-        user = self.request.user
-        return Message.objects.filter(sender=user) | Message.objects.filter(
-            receiver=user
-        )
+    def get(self, request, pk=None, group=None):
+        user_username = request.data.get("user")
+        receiver_username = request.data.get("receiver")
 
-    def post(self, request, *args, **kwargs):
-        """
-        Create a new encrypted message.
-        """
+        if group is not None:
+            group_obj = get_object_or_404(Group, pk=group)
+            message = get_object_or_404(Message, pk=pk, group=group_obj)
 
-        # If sender is sending message to group
-        if request.data.get("sender") and request.data.get("group"):
-            serializer = self.groupserializer(data=request.data)
-            if serializer.is_valid():
-                message = serializer.create(request.data)
-                return Response(
-                    self.groupserializer(message).data, status=status.HTTP_201_CREATED
-                )
-        # If sender is sending message to a user
-        elif request.data.get("sender") and request.data.get("receiver"):
-            serializer = self.dmserializer(data=request.data)
-            if serializer.is_valid():
-                message = serializer.create(request.data)
-                return Response(
-                    self.dmserializer(message).data, status=status.HTTP_201_CREATED
-                )
+            if not group_obj.members.filter(username=user_username).exists():
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
-    def retrieve(self, request, *args, **kwargs):
-        """
-        Retrieve a specific message, decrypting its content if the user is sender or receiver.
-        """
-        # Retriving messages for Group
-        if kwargs.get("group"):
-            group = get_object_or_404(Group, pk=kwargs["group"])
-            message = get_object_or_404(
-                self.get_queryset(), pk=kwargs["pk"], group=group
-            )
-
-            if request.user not in group.members.all():
-                return Response(
-                    {"detail": "Not authorized to view this message."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-            # Try to decrypt the message
             try:
-                decrypted_content = GroupMessage.decrypt_message(message.content, group)
+                decrypted = GroupMessage.decrypt_message(message.content, group_obj)
             except Exception as e:
-                decrypted_content = "Unable to decrypt message: " + str(e)
+                decrypted = f"Unable to decrypt message: {e}"
 
-            data = self.groupserializer(message).data
-            data["decrypted_content"] = decrypted_content
+            data = GroupMessageSerializer(message).data
+            data["decrypted_content"] = decrypted
             return Response(data)
-        # Retrieving messages for DM
-        else:
-            # Check if the user is sender or receiver
-            if not (request.user == message.sender or request.user == message.receiver):
-                return Response(
-                    {"detail": "Not authorized to view this message."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
-            message = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
-
-            if message.sender != request.user and message.receiver != request.user:
-                return Response(
-                    {"detail": "Not authorized to view this message."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-            # Try to decrypt the message
+        # If sender and receiver are provided (DM chat history)
+        if user_username and receiver_username:
             try:
-                decrypted_content = Message.decrypt_message(
-                    message.content, message.sender, message.receiver
+                user = CustomUser.objects.get(username=user_username)
+                receiver = CustomUser.objects.get(username=receiver_username)
+            except CustomUser.DoesNotExist:
+                return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Get all messages between the two users
+            messages = Message.objects.filter(
+                (Q(sender=user) & Q(receiver=receiver)) | (Q(sender=receiver) & Q(receiver=user))
+            ).order_by("timestamp")
+
+            response_data = []
+            import ast
+
+            for msg in messages:
+                try:
+                    content_dict = ast.literal_eval(msg.content)
+                    decrypted = Message.decrypt_message(
+                        content_dict["ciphertext"],
+                        content_dict["signature"],
+                        msg.sender,
+                        msg.receiver
+                    )
+                except Exception as e:
+                    decrypted = f"Unable to decrypt message: {e}"
+
+                data = MessageSerializer(msg).data
+                data["decrypted_content"] = decrypted
+                response_data.append(data)
+
+            return Response(response_data)
+
+        # ✅ If `pk` is given (get single DM message)
+        if pk is not None:
+            message = get_object_or_404(Message, pk=pk)
+            if user_username != message.sender.username and user_username != message.receiver.username:
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            import ast
+            try:
+                content_dict = ast.literal_eval(message.content)
+                decrypted = Message.decrypt_message(
+                    content_dict['ciphertext'],
+                    content_dict['signature'],
+                    message.sender,
+                    message.receiver
                 )
             except Exception as e:
-                decrypted_content = "Unable to decrypt message: " + str(e)
+                decrypted = f"Unable to decrypt message: {e}"
 
-            data = self.get_serializer(message).data
-            data["decrypted_content"] = decrypted_content
+            data = MessageSerializer(message).data
+            data["decrypted_content"] = decrypted
+            return Response(data)
+
+        return Response({"detail": "Bad request"}, status=status.HTTP_400_BAD_REQUEST)
+
+    
+    def post(self, request):
+        if request.data.get("sender") and request.data.get("group"):
+            serializer = GroupMessageSerializer(data=request.data)
+            if serializer.is_valid():
+                message = serializer.save()
+                return Response(GroupMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+        elif request.data.get("sender") and request.data.get("receiver"):
+            serializer = MessageSerializer(data=request.data)
+            if serializer.is_valid():
+                message = serializer.save()
+                return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, pk=None, group=None):
+        if group:
+            group_obj = get_object_or_404(Group, pk=group)
+            message = get_object_or_404(Message, pk=pk, group=group_obj)
+
+            if request.user not in group_obj.members.all():
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            try:
+                decrypted = GroupMessage.decrypt_message(message.content, group_obj)
+            except Exception as e:
+                decrypted = f"Unable to decrypt message: {e}"
+
+            data = GroupMessageSerializer(message).data
+            data["decrypted_content"] = decrypted
+            return Response(data)
+        else:
+            message = get_object_or_404(Message, pk=pk)
+
+            if request.user != message.sender and request.user != message.receiver:
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            try:
+                decrypted = Message.decrypt_message(message.content, message.sender, message.receiver)
+            except Exception as e:
+                decrypted = f"Unable to decrypt message: {e}"
+
+            data = MessageSerializer(message).data
+            data["decrypted_content"] = decrypted
             return Response(data)
 
 
