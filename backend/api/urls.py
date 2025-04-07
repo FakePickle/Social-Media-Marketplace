@@ -3,7 +3,8 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
 from .views import (LoginView, RegisterView,
                     MessageView, GroupCreateView, GroupDetailView,
-                    FriendshipView, UserView, VerifyEmailView)
+                    FriendshipView, CombinedChatGroupView, VerifyEmailView,
+                    UserView)
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -17,5 +18,6 @@ urlpatterns = [
     path('groups/', GroupCreateView.as_view(), name='create-group'),
     path('groups/<int:pk>/', GroupDetailView.as_view(), name='group-detail'),
     path('friendships/', FriendshipView.as_view(), name='friendship-list-create'),
-    path('friendships/delete/', FriendshipView.as_view(), name='friendship-delete')
+    path('friendships/delete/', FriendshipView.as_view(), name='friendship-delete'),
+    path('allChats/', CombinedChatGroupView.as_view(), name='all-chats'),
 ]

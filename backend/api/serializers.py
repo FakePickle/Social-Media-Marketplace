@@ -120,7 +120,7 @@ class OTPSerializer(serializers.Serializer):
 
         # Check if the OTP is valid
         totp = pyotp.TOTP(user.totp_secret)
-        if not totp.verify(otp):
+        if not totp.verify(totp):
             raise serializers.ValidationError("Invalid OTP.")
 
         return data
@@ -305,7 +305,7 @@ class GroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ["name", "members", "member_details", "created_by"]
+        fields = ["id", "name", "members", "member_details", "created_by"]
 
     def create(self, validated_data):
         """Create a new group using usernames for members and creator"""

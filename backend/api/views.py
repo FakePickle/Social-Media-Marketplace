@@ -2,6 +2,10 @@ import ast
 import base64
 import io
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from decouple import config
+
 import qrcode
 from django.contrib.auth import authenticate
 from django.core.mail import message, send_mail
@@ -16,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api import serializers
+from backend.backend import settings
 
 from .models import Chat, CustomUser, Friendship, Group, GroupMessage, Message
 from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
@@ -362,6 +367,93 @@ class MessageView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+class CombinedChatGroupView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        user = request.data.get("user")
+        user_instance = get_object_or_404(CustomUser, username=user)
+
+        chats = Chat.objects.filter(Q(user1=user_instance) | Q(user2=user_instance))
+        groups = Group.objects.filter(members=user_instance)
+
+        if not (chats.exists() or groups.exists()):
+            return Response({"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Fetch last messages for chats
+        chat_last_messages = {}
+        for chat in chats:
+            last_message = chat.messages.order_by('-timestamp').first()
+            if last_message:
+                chat_last_messages[chat.id] = {
+                    "content": last_message.content,
+                    "timestamp": last_message.timestamp.isoformat()
+                }
+
+        # Fetch and decrypt last messages for groups
+        group_last_messages = {}
+        for group in groups:
+            last_message = group.messages.order_by('-timestamp').first()
+            if last_message:
+                decrypted_content = self.decrypt_group_message(last_message)
+                group_last_messages[group.id] = {
+                    "content": decrypted_content,
+                    "timestamp": last_message.timestamp.isoformat()
+                }
+
+        # Serialize both
+        chat_serializer = ChatSerializer(chats, many=True)
+        group_serializer = GroupSerializer(groups, many=True)
+
+        # Add last messages to serialized chats
+        for chat_data in chat_serializer.data:
+            chat_data["type"] = "chat"
+            chat_id = chat_data.get('id')
+            chat_data["id"] = chat_id
+            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get("content")
+            chat_data["last_message_timestamp"] = chat_last_messages.get(chat_id, {}).get("timestamp")
+
+        # Add last messages to serialized groups
+        for group_data in group_serializer.data:
+            group_data["type"] = "group"
+            group_id = group_data.get('id')
+            group_data["id"] = group_id
+            group_data["last_message"] = group_last_messages.get(group_id, {}).get("content")
+            group_data["last_message_timestamp"] = group_last_messages.get(group_id, {}).get("timestamp")
+
+        # Combine and sort
+        combined_list = chat_serializer.data + group_serializer.data
+        sorted_list = sorted(
+            combined_list,
+            key=lambda x: x.get('last_message_timestamp') or '',
+            reverse=True
+        )
+
+        return Response({
+            "results": sorted_list,
+            "chat_count": len(chat_serializer.data),
+            "group_count": len(group_serializer.data)
+        })
+
+    def decrypt_group_message(self, group_message):
+        try:
+            ciphertext = bytes.fromhex(group_message.content)
+            private_key = serialization.load_pem_private_key(
+                group_message.group.private_key.encode(),
+                password=config("RSA_PASSPHRASE").encode()
+            )
+            plain_text = private_key.decrypt(
+                ciphertext,
+                padding.OAEP(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                )
+            )
+            return plain_text.decode()
+        except Exception as e:
+            return f"Error decrypting message: {str(e)}"
+    
 
 class GroupCreateView(APIView):
     permission_classes = [AllowAny]
