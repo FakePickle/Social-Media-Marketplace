@@ -11,6 +11,7 @@ function Auth() {
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isConfirmingEmail, setIsConfirmingEmail] = useState(false);
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
   const { isAuthenticated} = useContext(AuthContext)
   const [firstName, setFirstName] = useState("");
@@ -41,8 +42,56 @@ function Auth() {
     };
   }, []);
 
+  const handleEmailVerification = async () => {
+    try{
+      const otp = verificationCode.join("")
+      if (otp.length !== 6) {
+        alert("Please enter a 6-digit code.");
+        return;
+      }
+      const {data} = await api.post('verifyEmail/', {otp, email});
+      if (!data || typeof data.message !== "string") {
+        throw new Error("Invalid response from server");
+      }
+      if (data.message === "Email verified successfully"){
+        console.log("EMAIL VERIFICATION SUCCESS");
+        handleUserRegistering()
+        setIsConfirmingEmail(false)
+        setIsConfirming(true)
+      }else {
+        alert("Verification failed. Please try again.");
+      }
+    }catch (error) {
+      console.error("Login verification error:", error);
+      setIsAuthenticated(false);
+      alert("Verification failed. Please try again.");
+    }
+  }
+  const handleDataVerification = async () => {
+    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
+      alert("All fields are required.");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    try{
+      const {data} = await api.post("verifyData/", {username, password, email, firstName, lastName, dob})
+      if (!data || typeof data.message !== "string") {
+        throw new Error("Invalid response from server");
+      }
+      if (data === "Verification Email Sent"){
+        setIsConfirmingEmail(true)
+      }else{
+        alert("Data Verification failed. Please try again.");
+      }
+    }catch (error) {
+      alert(error?.error || "Registration failed");
+    }
+  }
   const handleUserRegistering = async () => {
-    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim()) {
+    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
       alert("All fields are required.");
       return;
     }
@@ -74,7 +123,6 @@ function Auth() {
   };
 
   const handleIsConfirming = () => {
-    // setIsRegistering(false);
     setIsConfirming(true);
   };
 
@@ -179,7 +227,55 @@ function Auth() {
       handleLogin();
     }
   };
-
+  if (isConfirmingEmail){
+    return (
+    <div style={styles.wrapper}>
+        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
+        <Card sx={styles.confirmCard}>
+        <Typography variant="h4" sx={styles.title}>
+            Email Verification
+          </Typography>
+          <Typography variant="h5" sx={styles.title}>
+            Enter 6-Digit Code sent on Email
+          </Typography>
+          <div style={{ display: "flex", gap: "10px" }}>
+            {verificationCode.map((digit, index) => (
+              <TextField
+                key={index}
+                variant="outlined"
+                inputProps={{ maxLength: 1, style: { textAlign: "center" }, readOnly: true }}
+                value={digit}
+                onChange={(e) => handleVerificationInput(index, e.target.value)}
+              />
+            ))}
+          </div>
+          <div style={styles.keypad}>
+            {[...Array(9).keys()].map((num) => (
+              <Button
+                key={num + 1}
+                sx={styles.keyButton}
+                variant="contained"
+                onClick={() => handleVirtualKeyPress(String(num + 1))}
+              >
+                {num + 1}
+              </Button>
+            ))}
+            <Button variant="contained" sx={styles.keyButton} onClick={() => handleVirtualKeyPress("0")}>
+              0
+            </Button>
+            <Button variant="contained" sx={styles.deleteButton} onClick={handleDeletePress}>
+              Delete
+            </Button>
+          </div>
+          <Button variant="contained" onClick={ handleEmailVerification} sx={styles.verifyButton}>
+            Verify
+          </Button>
+        </Card>
+      </div>
+    );
+  }
   if (isConfirming) {
     return (
       <div style={styles.wrapper}>
@@ -187,7 +283,10 @@ function Auth() {
         <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
       </div>
         <Card sx={styles.confirmCard}>
-          <Typography variant="h4" sx={styles.title}>
+        <Typography variant="h4" sx={styles.title}>
+            2 Factor Authentication
+          </Typography>
+          <Typography variant="h5" sx={styles.title}>
             Enter 6-Digit Code
           </Typography>
           <div style={{ display: "flex", gap: "10px" }}>
@@ -397,7 +496,7 @@ function Auth() {
                 onChange={(e) => setPassword(e.target.value)}
               />
 
-              <Button variant="contained" onClick={handleUserRegistering} sx={styles.actionButton}>
+              <Button variant="contained" onClick={handleDataVerification} sx={styles.actionButton}>
                 Register
               </Button>
             </>
