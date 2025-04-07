@@ -390,29 +390,3 @@ class GroupDetailView(APIView):
             return Response(GroupSerializer(group).data)
 
 
-class GroupMemberUpdateView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, pk):
-        """
-        Add members to a group
-        Expect: {"members": [user_id1, user_id2, ...]}
-        """
-        group = get_object_or_404(Group, pk=pk)
-        member_ids = request.data.get("members", [])
-        members = CustomUser.objects.filter(id__in=member_ids)
-        group.members.add(*members)
-        group.save()
-        return Response(GroupSerializer(group).data)
-
-    def delete(self, request, pk):
-        """
-        Remove members from a group
-        Expect: {"members": [user_id1, user_id2, ...]}
-        """
-        group = get_object_or_404(Group, pk=pk)
-        member_ids = request.data.get("members", [])
-        members = CustomUser.objects.filter(id__in=member_ids)
-        group.members.remove(*members)
-        group.save()
-        return Response(GroupSerializer(group).data)
