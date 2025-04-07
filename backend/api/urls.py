@@ -1,7 +1,11 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
-from .views import GetTOTPQRView, LoginView, OTPVerifyView, RegisterView, MessageView, ProtectedView
+from .views import (GetTOTPQRView, LoginView,
+                    OTPVerifyView, RegisterView,
+                    MessageView, ProtectedView,
+                    GroupCreateView, GroupDetailView,
+                    GroupMemberUpdateView)
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -12,4 +16,7 @@ urlpatterns = [
     path("token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("protected/", ProtectedView.as_view(), name="protected"),
     path("messages/", MessageView.as_view(), name="messages"),
+    path('groups/', GroupCreateView.as_view(), name='create-group'),
+    path('groups/<int:pk>/', GroupDetailView.as_view(), name='group-detail'),
+    path('groups/<int:pk>/members/', GroupMemberUpdateView.as_view(), name='update-group-members'),
 ]

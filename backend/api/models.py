@@ -155,12 +155,12 @@ class Message(models.Model):
         return encrypted.hex()
 
     @staticmethod
-    def decrypt_message(encrypted_message, sender, receiver):
+    def decrypt_message(encrypted_message: bytes, sender: CustomUser, receiver: CustomUser):
         from cryptography.hazmat.primitives import serialization
 
         # Load the sender's public key
         public_key = serialization.load_pem_public_key(
-            sender.public_key.encode()
+            sender.public_key.encode(),
         )
         # Decrypt the message using the sender's public key
         decrypted = public_key.decrypt(
@@ -200,6 +200,8 @@ class Message(models.Model):
 class Group(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    private_key = models.TextField(null=True, blank=True)  # For group encryption
+    public_key = models.TextField(null=True, blank=True)  # For group decryption
     is_public = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         CustomUser,  # Assuming CustomUser is in the same app
@@ -230,7 +232,7 @@ class GroupMessage(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     @staticmethod
-    def encrypt_message(plain_text, sender, group):
+    def encrypt_message(plain_text: str, group: Group):
         """
         Encrypt message using sender's public key (for authenticity) and 
         group members' public keys (for confidentiality).
@@ -239,10 +241,10 @@ class GroupMessage(models.Model):
         """
         # For simplicity, we'll use sender's public key here
         # In practice, you'd want to encrypt for all group members
-        public_key = serialization.load_pem_public_key(
-            sender.public_key.encode()
+        private_key = serialization.load_pem_private_key(
+            group.private_key.encode()
         )
-        encrypted = public_key.encrypt(
+        encrypted = private_key.encrypt(
             plain_text.encode(),
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -253,16 +255,16 @@ class GroupMessage(models.Model):
         return encrypted.hex()
 
     @staticmethod
-    def decrypt_message(encrypted_message, sender, receiver):
+    def decrypt_message(encrypted_message, group: Group):
         """
         Decrypt message using receiver's private key.
         Assumes message was encrypted with sender's public key.
         """
-        private_key = serialization.load_pem_private_key(
-            receiver.private_key.encode(),
+        public_key = serialization.load_pem_public_key(
+            group.public_key.encode(),
             password=None
         )
-        decrypted = private_key.decrypt(
+        decrypted = public_key.decrypt(
             bytes.fromhex(encrypted_message),
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -271,22 +273,4 @@ class GroupMessage(models.Model):
             )
         )
         return decrypted.decode()
-
-    def save(self, *args, **kwargs):
-        # Only encrypt if content isn't already encrypted
-        # Using a simple heuristic - real systems might use a flag
-        if not self.content.startswith("ENC:"):
-            encrypted_content = self.encrypt_message(self.content, self.sender, self.group)
-            self.content = f"ENC:{encrypted_content}"
-        super().save(*args, **kwargs)
-
-    def get_decrypted_content(self, receiver):
-        """Helper method to get decrypted content for a specific receiver"""
-        if self.content.startswith("ENC:"):
-            return self.decrypt_message(self.content[4:], self.sender, receiver)
-        return self.content  # Return as-is if not encrypted
-
-    def __str__(self):
-        return f"{self.sender} in {self.group.name} at {self.timestamp}"
-
 

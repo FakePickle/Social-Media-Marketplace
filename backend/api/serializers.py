@@ -140,8 +140,75 @@ class FriendshipSerializer(serializers.Serializer):
     def delete(self, instance):
         """Delete a friendship."""
         try:
-            friendship = Friendship.objects.get(user=instance.user, friend=instance.friend)
+            friendship = Friendship.objects.get(user=instance.get("user"), friend=instance.get("friend"))
             friendship.delete()
             return friendship
         except Friendship.DoesNotExist:
             raise serializers.ValidationError("Friendship does not exist.")
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ["id", "name", "members"]
+
+    def create(self, validated_data):
+        members = validated_data.pop("members", [])
+        group = Group.objects.create(**validated_data)
+        group.members.set(members)
+        return group
+
+    def update(self, instance, validated_data):
+        instance.name = validated_data.get("name", instance.name)
+        members = validated_data.get("members", None)
+        if members is not None:
+            instance.members.set(members)
+        instance.save()
+        return instance
+
+    def remove_member(self, instance, member):
+        """Remove a specific member from the group"""
+        if member in instance.members.all():
+            instance.members.remove(member)
+        else:
+            raise serializers.ValidationError("Member not in group.")
+        return instance
+
+    def delete_group(self, instance):
+        """Delete the group instance"""
+        instance.delete()
+        return instance
+
+
+class GroupMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupMessage
+        fields = ["sender", "group", "content", "timestamp"]
+
+    def create(self, validated_data):
+        """Create a new group message"""
+        sender = validated_data["sender"]
+        group = validated_data["group"]
+        message = validated_data["content"]
+
+        # Ensure sender and group are valid
+        try:
+            sender_user = CustomUser.objects.get(username=sender)
+            group_instance = Group.objects.get(name=group)
+        except (CustomUser.DoesNotExist, Group.DoesNotExist):
+            raise serializers.ValidationError("Sender or group does not exist.")
+        
+        # Create the group message instance
+        validated_data["sender"] = sender_user
+        validated_data["group"] = group_instance
+        
+        message = GroupMessage().encrypt_message(message, group_instance)
+        print(f"Encrypted group message: {message}")
+        print("Decrypted group message:", GroupMessage.decrypt_message(message, group_instance))
+        
+        # Save the group message to the database
+        validated_data["content"] = message
+        validated_data["timestamp"] = timezone.now()
+
+        group_message = GroupMessage.objects.create(**validated_data)
+        return group_message
