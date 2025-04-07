@@ -1,3 +1,4 @@
+from datetime import timezone
 import pyotp
 from rest_framework import serializers
 
@@ -66,3 +67,36 @@ class OTPVerificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OTPVerification
         fields = ["email", "otp"]
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = ["id", "sender", "receiver", "content", "timestamp"]
+    
+    def create(self, validated_data):
+        """Create a new message"""
+        sender = validated_data["sender"]
+        receiver = validated_data["receiver"]
+        message = validated_data["content"]
+
+        # Ensure sender and receiver are valid users
+        try:
+            sender_user = CustomUser.objects.get(username=sender)
+            receiver_user = CustomUser.objects.get(username=receiver)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("Sender or receiver does not exist.")
+        
+        # Create the message instance
+        validated_data["sender"] = sender_user
+        validated_data["receiver"] = receiver_user
+        
+        message = Message().encrypt_message(message, sender_user, receiver_user)
+        print(f"Encrypted message: {message}")
+        print("Decrypted message:", Message.decrypt_message(message))
+        # Save the message to the database
+        validated_data["content"] = message
+        validated_data["timestamp"] = timezone.now()
+
+        message = Message.objects.create(**validated_data)
+        return message

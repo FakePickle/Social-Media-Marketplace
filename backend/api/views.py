@@ -1,6 +1,7 @@
 import base64
 import io
 
+from django.shortcuts import get_object_or_404
 import qrcode
 from django.contrib.auth import authenticate
 from django.utils.decorators import method_decorator
@@ -13,7 +14,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import CustomUser, OTPVerification
 from .serializers import (LoginSerializer, OTPVerificationSerializer,
-                          RegisterSerializer)
+                          RegisterSerializer, MessageSerializer)
+from .models import CustomUser, OTPVerification, Message
 
 
 class RegisterView(APIView):
@@ -174,3 +176,42 @@ class OTPVerifyView(APIView):
 class ProtectedView(APIView):
     def get(self, request):
         return Response({"message": "This is a protected view."})
+    
+class MessageView(APIView):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+    permission_classes = [AllowAny]
+
+    def get(self):
+        """
+        Limit the messages to those sent or received by the current user.
+        """
+        user = self.request.user
+        return Message.objects.filter(sender=user) | Message.objects.filter(receiver=user)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Create a new encrypted message.
+        """
+        serializer = self.serializer_class()
+        message = serializer.create(request.data)
+        return Response(self.serializer_class(message).data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve a specific message, decrypting its content if the user is sender or receiver.
+        """
+        message = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+
+        if message.sender != request.user and message.receiver != request.user:
+            return Response({"detail": "Not authorized to view this message."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Try to decrypt the message
+        try:
+            decrypted_content = Message.decrypt_message(message.content, message.sender, message.receiver)
+        except Exception as e:
+            decrypted_content = "Unable to decrypt message: " + str(e)
+
+        data = self.get_serializer(message).data
+        data["decrypted_content"] = decrypted_content
+        return Response(data)
