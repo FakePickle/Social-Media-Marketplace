@@ -1,10 +1,11 @@
 import { Card, TextField, Button, Typography } from "@mui/material";
 import React, { useContext, useState } from "react";
 import { AuthContext } from "../contexts/AuthContext";
+import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
 
 function Auth() {
-  const { login, register } = useContext(AuthContext);
+  const { login, register,setIsAuthenticated } = useContext(AuthContext);
   const [isSwapped, setIsSwapped] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -88,9 +89,32 @@ function Auth() {
     }
   };
 
-  const handleConfirmSignUp = () => {
+  
+  const handleConfirmSignUp = async () => {
     setIsConfirming(false);
-    window.location.href = "/home";
+    try{
+      const otp = verificationCode.join("")
+      const {data} = await api.post('verify-totp/', {otp, email});
+      if (data.message === "Account verified successfully"){
+        console.log("VERIFICATION SUCCESS");
+        setIsSwapped(false);
+        setEmail("")
+        setPassword("")
+        setFirstName("")
+        setUsername("")
+        setLastName("")
+        setIsRegistering(false)
+        setIsConfirming(false)
+        setVerificationCode(["", "", "", "", "", ""])
+        setQrCodeURL("")
+        settotpSecretKey("")
+        console.log("RESET COMPLETE")
+      }
+    }catch (error){
+      setIsAuthenticated(false);
+    console.log("VERIFICATION : Set is authenticated to false")
+    throw error.response?.data || { error: 'Verification failed' };
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -102,6 +126,9 @@ function Auth() {
   if (isConfirming) {
     return (
       <div style={styles.wrapper}>
+        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
         <Card sx={styles.confirmCard}>
           <Typography variant="h4" sx={styles.title}>
             Enter 6-Digit Code
@@ -146,6 +173,9 @@ function Auth() {
   if (isRegistering) {
     return (
       <div style={styles.wrapper}>
+        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
         <Card sx={styles.registerCard}>
           <Typography variant="h5" sx={styles.title}>
             Scan QR Code to Sign Up with Google
@@ -251,6 +281,16 @@ function Auth() {
               <Typography variant="h4" sx={styles.title}>
                 Register
               </Typography>
+              
+              <TextField
+                label="Username"
+                variant="outlined"
+                fullWidth
+                sx={{ marginBottom: "10px" }}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+
               <TextField
                 label="First Name"
                 variant="outlined"
@@ -267,15 +307,6 @@ function Auth() {
                 sx={{ marginBottom: "10px" }}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-              />
-
-              <TextField
-                label="Username"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
               />
 
               <TextField
@@ -332,8 +363,8 @@ const styles = {
     textAlign: "center",
   },
   registerCard: {
-    width: "50vh",
-    height: "50vh",
+    width: "auto",
+    height: "auto",
     backgroundColor: "#e0e1dd",
     color: "black",
     borderRadius: "25px",

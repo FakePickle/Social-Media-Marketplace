@@ -80,6 +80,8 @@ const register = async (email, username, password, first_name, last_name) => {
   }
 };
 
+
+
 const logout = () => {
 if (refreshToken) {
   api.post('token/blacklist/', { refresh: refreshToken }).catch(() => {});
@@ -91,7 +93,7 @@ localStorage.removeItem('refreshToken');
 };
 
 return (
-    <AuthContext.Provider value={{ accessToken, login, register, logout, isAuthenticated, api }}>
+    <AuthContext.Provider value={{ accessToken, login, register, logout, isAuthenticated, api, setIsAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );
