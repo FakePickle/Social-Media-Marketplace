@@ -65,9 +65,9 @@ try {
 }
 };
 
-const register = async (email, user_name, password, first_name, last_name) => {
+const register = async (email, username, password, first_name, last_name) => {
   try{
-    const { data } = await api.post('register/', {email, user_name, password, first_name, last_name});
+    const { data } = await api.post('register/', {email, username, password, first_name, last_name});
     const message = data.message
     const instructions = data.instructions
     const qrCodeURL = data.qr_code
@@ -78,7 +78,7 @@ const register = async (email, user_name, password, first_name, last_name) => {
   console.log("REGISTER : Set is authenticated to false")
   throw error.response?.data || { error: 'Register failed' };
   }
-}
+};
 
 const logout = () => {
 if (refreshToken) {
@@ -91,7 +91,7 @@ localStorage.removeItem('refreshToken');
 };
 
 return (
-    <AuthContext.Provider value={{ accessToken, login, logout, isAuthenticated, api }}>
+    <AuthContext.Provider value={{ accessToken, login, register, logout, isAuthenticated, api }}>
       {children}
     </AuthContext.Provider>
   );
