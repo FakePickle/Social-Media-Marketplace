@@ -1,6 +1,6 @@
 from datetime import timezone
 
-import pyotp
+from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
 from .models import (CustomUser, Friendship, Group, GroupMessage, Message,
@@ -207,36 +207,120 @@ class FriendshipSerializer(serializers.Serializer):
 
 
 class GroupSerializer(serializers.ModelSerializer):
+    members = serializers.ListField(
+        child=serializers.CharField(), write_only=True
+    )
+    member_details = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='username',
+        source='members'
+    )
+    created_by = serializers.SlugRelatedField(
+        slug_field="username",
+        queryset=CustomUser.objects.all()
+    )
+
     class Meta:
         model = Group
-        fields = ["id", "name", "members"]
+        fields = ["name", "members", "member_details", "created_by"]
 
     def create(self, validated_data):
-        members = validated_data.pop("members", [])
-        group = Group.objects.create(**validated_data)
-        group.members.set(members)
+        """Create a new group using usernames for members and creator"""
+        member_usernames = validated_data.pop("members", [])
+        creator_username = validated_data.pop("created_by", None)
+
+        if not creator_username:
+            raise serializers.ValidationError({"created_by": "This field is required."})
+
+        # Validate users
+        users = CustomUser.objects.filter(username__in=member_usernames)
+        if users.count() != len(member_usernames):
+            found_usernames = set(users.values_list("username", flat=True))
+            missing = set(member_usernames) - found_usernames
+            raise serializers.ValidationError({"members": f"Users not found: {', '.join(missing)}"})
+
+        # Validate creator
+        try:
+            creator_user = CustomUser.objects.get(email=creator_username)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError({"created_by": "User does not exist."})
+
+        # Create and save group first
+        group = Group.objects.create(
+            name=validated_data["name"],
+            created_by=creator_user,
+        )
+
+        # Assign members
+        group.members.set(users)
+
+        # Generate encryption keys
+        group.generate_keys()
+
         return group
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get("name", instance.name)
-        members = validated_data.get("members", None)
-        if members is not None:
-            instance.members.set(members)
-        instance.save()
+
+        member_usernames = validated_data.get("members", None)
+        if member_usernames is not None:
+            users = CustomUser.objects.filter(username__in=member_usernames)
+            
+            # Check if all usernames provided are valid
+            if users.count() != len(member_usernames):
+                invalid_usernames = set(member_usernames) - set(users.values_list("username", flat=True))
+                raise serializers.ValidationError(
+                    {"members": f"The following usernames are invalid: {', '.join(invalid_usernames)}"}
+                )
+
+            instance.add_member(users)
+
         return instance
 
-    def remove_member(self, instance, member):
-        """Remove a specific member from the group"""
-        if member in instance.members.all():
-            instance.members.remove(member)
+
+    def remove_member_by_name(self, group_name, member_username):
+        """Remove a specific member from the group using group name and member username"""
+
+        group = get_object_or_404(Group, name=group_name)
+
+        try:
+            member = CustomUser.objects.get(username=member_username)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User does not exist.")
+
+        if member in group.members.all():
+            group.members.remove(member)
         else:
             raise serializers.ValidationError("Member not in group.")
-        return instance
+        
+        return group
 
-    def delete_group(self, instance):
-        """Delete the group instance"""
-        instance.delete()
-        return instance
+    def delete_group_by_name(self, group_name, requested_by_username):
+        """Delete the group instance using group name if requested by its creator"""
+        from django.shortcuts import get_object_or_404
+
+        group = get_object_or_404(Group, name=group_name)
+
+        try:
+            user = CustomUser.objects.get(username=requested_by_username)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User does not exist.")
+
+        if group.created_by != user:
+            raise serializers.ValidationError("Only the group creator can delete the group.")
+        
+        group.delete()
+        return {"message": f"Group '{group_name}' deleted successfully."}
+
+
+    
+    def validate(self, data):
+        """Ensure group name is unique"""
+        group_name = data.get("name")
+        if Group.objects.filter(name=group_name).exists():
+            raise serializers.ValidationError("Group with this name already exists.")
+        return data
 
 
 class GroupMessageSerializer(serializers.ModelSerializer):

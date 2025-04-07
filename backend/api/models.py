@@ -248,8 +248,33 @@ class Group(models.Model):
         on_delete=models.CASCADE,
         related_name="created_groups",
     )
-    members = models.ManyToManyField(CustomUser, related_name="group_members")
+    members = models.ManyToManyField(CustomUser, related_name="group_members", null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def generate_keys(self):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+
+        self.private_key = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(
+                config("RSA_PASSPHRASE").encode()
+            ),
+        ).decode()
+
+        self.public_key = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode()
+
+        self.save()
+
+    def add_member(self, user_list):
+        for user in user_list:
+            if user not in self.members.all():
+                self.members.add(user)
+                self.save()
 
     def __str__(self):
         return self.name

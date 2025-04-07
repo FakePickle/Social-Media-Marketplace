@@ -377,14 +377,17 @@ class GroupDetailView(APIView):
         group = get_object_or_404(Group, pk=pk)
         serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
+            group = serializer.update(group, request.data)
+            return Response(GroupSerializer(group).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # delete member from group
     def delete(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
-        group.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = GroupSerializer(group, data=request.data, partial=True)
+        if serializer.is_valid():
+            group = serializer.remove_member_by_name(group, request.data.get("member"))
+            return Response(GroupSerializer(group).data)
 
 
 class GroupMemberUpdateView(APIView):
