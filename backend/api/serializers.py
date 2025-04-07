@@ -382,7 +382,7 @@ class GroupMessageSerializer(serializers.ModelSerializer):
 
         # Save the group message to the database
         validated_data["content"] = message
-        validated_data["timestamp"] = timezone.now()
+        validated_data["timestamp"] = timezone.utc
 
         group_message = GroupMessage.objects.create(**validated_data)
         return group_message

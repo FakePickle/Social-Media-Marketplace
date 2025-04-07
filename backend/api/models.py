@@ -322,41 +322,87 @@ class GroupMessage(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     @staticmethod
-    def encrypt_message(plain_text: str, group: Group):
-        """
-        Encrypt message using sender's public key (for authenticity) and
-        group members' public keys (for confidentiality).
-        In a real system, you'd likely use symmetric encryption with a shared key
-        or hybrid encryption for efficiency.
-        """
-        # For simplicity, we'll use sender's public key here
-        # In practice, you'd want to encrypt for all group members
-        private_key = serialization.load_pem_private_key(group.private_key.encode())
-        encrypted = private_key.encrypt(
+    def encrypt_message(plain_text, sender, receiver):
+        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from decouple import config
+
+        # Load sender's private key (for signing)
+        private_key = serialization.load_pem_private_key(
+            sender.private_key.encode(), 
+            password=config("RSA_PASSPHRASE").encode()
+        )
+
+        # Sign the message
+        signature = private_key.sign(
+            plain_text.encode(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+
+        # Load receiver's public key (for encryption)
+        public_key = serialization.load_pem_public_key(receiver.public_key.encode())
+
+        # Encrypt the plaintext
+        ciphertext = public_key.encrypt(
             plain_text.encode(),
             padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                mgf=padding.MGF1(hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None,
             ),
         )
-        return encrypted.hex()
+
+        # Return both encrypted message and signature (you can encode with base64 or hex)
+        return {
+            "ciphertext": ciphertext.hex(),
+            "signature": signature.hex()
+        }
+
 
     @staticmethod
-    def decrypt_message(encrypted_message, group: Group):
-        """
-        Decrypt message using receiver's private key.
-        Assumes message was encrypted with sender's public key.
-        """
-        public_key = serialization.load_pem_public_key(
-            group.public_key.encode(), password=None
+    def decrypt_message(ciphertext_hex, signature_hex, sender, receiver):
+        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.exceptions import InvalidSignature
+        from decouple import config
+
+        ciphertext = bytes.fromhex(ciphertext_hex)
+        signature = bytes.fromhex(signature_hex)
+
+        # Load receiver's private key (to decrypt message)
+        private_key = serialization.load_pem_private_key(
+            receiver.private_key.encode(), 
+            password=config("RSA_PASSPHRASE").encode()
         )
-        decrypted = public_key.decrypt(
-            bytes.fromhex(encrypted_message),
+
+        # Decrypt the message
+        plain_text = private_key.decrypt(
+            ciphertext,
             padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                mgf=padding.MGF1(hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None,
             ),
         )
-        return decrypted.decode()
+
+        # Load sender's public key (to verify signature)
+        public_key = serialization.load_pem_public_key(sender.public_key.encode())
+
+        # Verify the signature
+        try:
+            public_key.verify(
+                signature,
+                plain_text,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+            return plain_text.decode()
+        except InvalidSignature:
+            raise ValueError("Signature verification failed!")
