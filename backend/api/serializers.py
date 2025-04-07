@@ -1,10 +1,11 @@
-from datetime import timezone
+import random
 
+import pyotp
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
-from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message,
-                     OTPVerification)
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -14,19 +15,52 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
-
     class Meta:
         model = CustomUser
         fields = [
             "username",
             "first_name",
             "last_name",
-            "phone_number",
+            "dob",
             "email",
             "password",
             "bio",
         ]
+        extra_kwargs = {
+            "password": {"write_only": True, "min_length": 8},
+            "bio": {"required": False},
+        }
+
+    def validate_dob(self, value):
+        """Validate the date of birth to be 18"""
+        if value:
+            today = timezone.now().date()
+            age = (
+                today.year
+                - value.year
+                - ((today.month, today.day) < (value.month, value.day))
+            )
+            if age < 18:
+                raise serializers.ValidationError("You must be at least 18 years old.")
+        return value
+
+    def validate_email(self, value):
+        """Validate the email to be unique"""
+        if CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+
+    def generate_otp(self):
+        """Generate a random 6-digit OTP"""
+        return str(random.randint(100000, 999999))
+
+    def save(self):
+        request = self.context["request"]
+        code = self.generate_otp()
+        request.session["registration_data"] = self.validated_data
+        request.session["verification_code"] = code
+        request.session.modified = True
+        return code
 
     def create(self, validated_data):
         """Create a new user with TOTP setup"""
@@ -36,7 +70,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             username=validated_data["username"],
             first_name=validated_data["first_name"],
             last_name=validated_data["last_name"],
-            phone_number=validated_data.get("phone_number", ""),
+            dob=validated_data["dob"],
             bio=validated_data.get("bio", ""),
         )
 
@@ -47,9 +81,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Generate TOTP secret for 2FA
         user.generate_keys()
         user.generate_totp_secret()
-
-        # Create OTP verification record
-        OTPVerification.objects.create(user=user)
 
         return user
 
@@ -63,13 +94,36 @@ class LoginSerializer(serializers.ModelSerializer):
         fields = ["email", "password"]
 
 
-class OTPVerificationSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(required=True)
-    otp = serializers.CharField(max_length=6, required=True)
-
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = OTPVerification
-        fields = ["email", "otp"]
+        model = CustomUser
+        fields = [
+            "username",
+            "first_name",
+            "last_name",
+            "bio",
+            "profile_picture",
+            "is_active",
+            "is_verified",
+        ]
+
+
+class OTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(max_length=6, min_length=6, required=True)
+
+    def validate(self, data):
+        try:
+            user = CustomUser.objects.get(email=data["email"])
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User does not exist.")
+
+        # Check if the OTP is valid
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(otp):
+            raise serializers.ValidationError("Invalid OTP.")
+
+        return data
 
 
 class ChatSerializer(serializers.ModelSerializer):
@@ -133,7 +187,7 @@ class MessageSerializer(serializers.ModelSerializer):
         print(f"Encrypted message: {message}")
         # Save the message to the database
         validated_data["content"] = message
-        validated_data["timestamp"] = timezone.utc
+        validated_data["timestamp"] = timezone.now()
 
         return Message.objects.create(**validated_data)
 

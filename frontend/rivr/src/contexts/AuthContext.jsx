@@ -1,23 +1,25 @@
 import React, { createContext, useState, useEffect } from 'react';
-import axios from 'axios';
-// import { useNavigate } from "react-router-dom";
+import axios, { HttpStatusCode } from 'axios';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(localStorage.getItem('accessToken') || null);
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refreshToken') || null);
-  const [ isAuthenticated, setIsAuthenticated ] = useState(false);
-  // const navigate = useNavigate();
-  
+
+  // Sync isAuthenticated with accessToken presence
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('accessToken'));
 
   const api = axios.create({
     baseURL: 'http://127.0.0.1:8000/api/',
   });
 
-  // Set up Axios interceptors
   useEffect(() => {
-    api.interceptors.request.use(
+    // Clean up previous interceptors to avoid duplicates
+    api.interceptors.request.eject(api.interceptors.request[0] || {});
+    api.interceptors.response.eject(api.interceptors.response[0] || {});
+
+    const requestInterceptor = api.interceptors.request.use(
       (config) => {
         if (accessToken) {
           config.headers.Authorization = `Bearer ${accessToken}`;
@@ -27,7 +29,7 @@ export const AuthProvider = ({ children }) => {
       (error) => Promise.reject(error)
     );
 
-    api.interceptors.response.use(
+    const responseInterceptor = api.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
@@ -39,6 +41,7 @@ export const AuthProvider = ({ children }) => {
             });
             setAccessToken(data.access);
             localStorage.setItem('accessToken', data.access);
+            setIsAuthenticated(true); // Update authentication status
             originalRequest.headers.Authorization = `Bearer ${data.access}`;
             return api(originalRequest);
           } catch (refreshError) {
@@ -47,9 +50,15 @@ export const AuthProvider = ({ children }) => {
           }
         }
         return Promise.reject(error);
-    }
-);
-}, [accessToken, refreshToken]);
+      }
+    );
+
+    // Cleanup on unmount or token change
+    return () => {
+      api.interceptors.request.eject(requestInterceptor);
+      api.interceptors.response.eject(responseInterceptor);
+    };
+  }, [accessToken, refreshToken]);
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -76,53 +85,25 @@ const verifyTotp = async (otp, email) => {
   }
 };
 
-
-const verifyData = async (username, password, email, firstName, lastName, dob) => {
-  if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-    throw new Error("All fields are required");
-  }
-  if (!isValidEmail(email)) {
-    throw new Error("Please enter a valid email address");
-  }
-  try {
-    const { data } = await api.post("verifyData/", {
-      username,
-      password,
-      email,
-      firstName,
-      lastName,
-      dob,
-    });
-    if (!data || typeof data.message !== "string") {
-      throw new Error("Invalid response from server");
-    }
-    if (data.message === "Verification Email Sent") {
-      return true;
-    } else {
-      throw new Error("Data verification failed");
-    }
-  } catch (error) {
-    console.error("Data verification error:", error);
-    throw new Error("Data verification failed. Please try again.");
-  }
-};
-
 const verifyEmail = async (otp, email) => {
   if (otp.length !== 6) {
     throw new Error("Please enter a 6-digit code");
   }
   try {
-    const { data } = await api.post("verifyEmail/", { otp, email });
-    if (!data || typeof data.message !== "string") {
-      throw new Error("Invalid response from server");
-    }
-    if (data.message === "Email verified successfully") {
-      return true;
+    const response = await api.post("verify-email/", { otp, email });
+
+    if (response.status === 200 || response.status === 201) {
+      console.log(response.data)
+      return response.data;
     } else {
       throw new Error("Verification failed");
     }
   } catch (error) {
     console.error("Email verification error:", error);
+
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
     throw new Error("Verification failed. Please try again.");
   }
 };
@@ -174,6 +155,7 @@ setAccessToken(null);
 setRefreshToken(null);
 localStorage.removeItem('accessToken');
 localStorage.removeItem('refreshToken');
+setIsAuthenticated(false);
 };
 
 return (

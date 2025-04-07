@@ -4,6 +4,7 @@ import io
 
 import qrcode
 from django.contrib.auth import authenticate
+from django.core.mail import message, send_mail
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
@@ -14,81 +15,40 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message,
-                     OTPVerification)
+from api import serializers
+
+from .models import Chat, CustomUser, Friendship, Group, GroupMessage, Message
 from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
                           GroupSerializer, LoginSerializer, MessageSerializer,
-                          OTPVerificationSerializer, RegisterSerializer)
+                          RegisterSerializer)
 
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
+        serializer = RegisterSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
-            user = serializer.save()
+            code = serializer.save()
 
-            # Generate QR code
-            qr = qrcode.QRCode(version=1, box_size=10, border=4)
-            qr.add_data(user.get_totp_uri())
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-
-            buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
-            qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            email = serializer.validated_data["email"]
+            send_mail(
+                subject="Welcome to Rivr - Verify your account",
+                message=f"Please verify your account using the following code: {code}",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
 
             return Response(
                 {
-                    "message": "Account created successfully. You need to verify your account using an authenticator app.",
-                    "instructions": "1. Scan the QR code with your authenticator app (e.g., Google Authenticator, Authy).\n2. Enter the code from your app to verify your account.",
-                    "qr_code": f"data:image/png;base64,{qr_code}",
-                    "secret_key": user.get_secret(),
-                    "email": user.email,
-                    "verification_endpoint": "/api/verify-totp/",
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class GetTOTPQRView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        email = request.query_params.get("email")
-
-        if not email:
-            return Response(
-                {"error": "Email parameter is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            user = CustomUser.objects.get(email=email)
-
-            # Generate QR code
-            qr = qrcode.QRCode(version=1, box_size=10, border=4)
-            qr.add_data(user.get_totp_uri())
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-
-            buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
-            qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-            return Response(
-                {
-                    "qr_code": f"data:image/png;base64,{qr_code}",
-                    "totp_uri": user.get_totp_uri(),
+                    "message": "Verification code sent to your email.",
+                    "email": email,
+                    "verify-endpoint": "/otp/verify-email/",
                 },
                 status=status.HTTP_200_OK,
             )
-        except CustomUser.DoesNotExist:
-            return Response(
-                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LoginView(APIView):
@@ -129,56 +89,97 @@ class LoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class OTPVerifyView(APIView):
+class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = OTPVerificationSerializer(data=request.data)
-        if serializer.is_valid():
-            otp = serializer.validated_data["otp"]
-            email = serializer.validated_data["email"]
+        code = request.data.get("code")
+        email = request.data.get("email")
+        if not code or code != request.session.get("verification_code"):
+            return Response(
+                {"error": "Invalid or expired code"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-            try:
-                user = CustomUser.objects.get(email=email)
-                otp_record = OTPVerification.objects.filter(
-                    user=user, is_verified=False
-                ).first()
+        registration_data = request.session.get("registration_data")
+        if not registration_data or registration_data["email"] != email:
+            return Response(
+                {"error": "Session expired or email mismatch. Please register again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-                if not otp_record:
-                    return Response(
-                        {"error": "No pending verification for this user"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+        serializer = RegisterSerializer(data=registration_data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.create(registration_data)
 
-                if otp_record.verify_otp(otp):
-                    otp_record.is_verified = True
-                    user.is_verified = True
-                    user.save()
-                    otp_record.save()
-                    return Response(
-                        {
-                            "message": "Account verified successfully",
-                            "instructions": "You can now log in with your email and password",
-                            "login_endpoint": "/api/login/",
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-                return Response(
-                    {
-                        "error": "Invalid OTP. Please try again with a new code from your authenticator app."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except CustomUser.DoesNotExist:
-                return Response(
-                    {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(user.get_totp_uri())
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        del request.session["registration_data"]
+        del request.session["verification_code"]
+
+        return Response(
+            {
+                "message": "Account created successfully.",
+                "instructions": "Scan this QR code in your authenticator app.",
+                "qr_code": f"data:image/png;base64,{qr_code}",
+                "secret_key": user.get_secret(),
+                "email": user.email,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
-class ProtectedView(APIView):
-    def get(self, request):
-        return Response({"message": "This is a protected view."})
+# class OTPVerifyView(APIView):
+#     permission_classes = [AllowAny]
+#
+#     def post(self, request):
+#         serializer = OTPVerificationSerializer(data=request.data)
+#         if serializer.is_valid():
+#             otp = serializer.validated_data["otp"]
+#             email = serializer.validated_data["email"]
+#
+#             try:
+#                 user = CustomUser.objects.get(email=email)
+#                 otp_record = OTPVerification.objects.filter(
+#                     user=user, is_verified=False
+#                 ).first()
+#
+#                 if not otp_record:
+#                     return Response(
+#                         {"error": "No pending verification for this user"},
+#                         status=status.HTTP_400_BAD_REQUEST,
+#                     )
+#
+#                 if otp_record.verify_otp(otp):
+#                     otp_record.is_verified = True
+#                     user.is_verified = True
+#                     user.save()
+#                     otp_record.save()
+#                     return Response(
+#                         {
+#                             "message": "Account verified successfully",
+#                             "instructions": "You can now log in with your email and password",
+#                             "login_endpoint": "/api/login/",
+#                         },
+#                         status=status.HTTP_200_OK,
+#                     )
+#                 return Response(
+#                     {
+#                         "error": "Invalid OTP. Please try again with a new code from your authenticator app."
+#                     },
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+#             except CustomUser.DoesNotExist:
+#                 return Response(
+#                     {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+#                 )
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FriendshipView(APIView):

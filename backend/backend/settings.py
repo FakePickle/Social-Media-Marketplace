@@ -1,13 +1,13 @@
+import os
 from datetime import timedelta
 from pathlib import Path
-import os
 
-from decouple import config, Config, RepositoryEnv
+from decouple import Config, RepositoryEnv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file in the base directory
-env_config = Config(RepositoryEnv(os.path.join(BASE_DIR, '.env')))
+env_config = Config(RepositoryEnv(os.path.join(BASE_DIR, ".env")))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -60,10 +60,10 @@ REST_FRAMEWORK = {
 }
 
 # Read RSA keys for JWT
-with open(os.path.join(BASE_DIR, '.jwt_private.pem'), 'rb') as f:
+with open(os.path.join(BASE_DIR, ".jwt_private.pem"), "rb") as f:
     PRIVATE_KEY = f.read()
 
-with open(os.path.join(BASE_DIR, '.jwt_public.pem'), 'rb') as f:
+with open(os.path.join(BASE_DIR, ".jwt_public.pem"), "rb") as f:
     PUBLIC_KEY = f.read()
 
 SIMPLE_JWT = {
@@ -141,9 +141,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
 # Security settings
 # SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_AGE = 300
 # SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
 # CSRF_COOKIE_SECURE = True
 # SECURE_BROWSER_XSS_FILTER = True
 # SECURE_CONTENT_TYPE_NOSNIFF = True
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = env_config("EMAIL_HOST")
+EMAIL_PORT = env_config("EMAIL_PORT", cast=int)
+EMAIL_HOST_USER = env_config("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = env_config("EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = env_config("EMAIL_USE_TLS", default=True, cast=bool)
