@@ -199,7 +199,11 @@ class FriendshipView(APIView):
         """
         Create a new friendship.
         """
-        serializer = self.serializer_class(data=request.data)
+        print(request.data)
+        # print("Incoming data:", request.data)
+        data = request.data.copy()
+        # print("Data after copy:", data)
+        serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             friendship = serializer.save()
             return Response(self.serializer_class(friendship).data, status=status.HTTP_201_CREATED)

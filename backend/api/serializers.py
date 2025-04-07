@@ -105,17 +105,21 @@ class MessageSerializer(serializers.ModelSerializer):
 class FriendshipSerializer(serializers.Serializer):
     class Meta:
         model = Friendship
-        fields = ["user", "friend"]
+        fields = ["user", "friend", "created_at"]
+
 
     def create(self, validated_data):
         """Create a new friendship"""
-        user = validated_data["user"]
-        friend = validated_data["friend"]
+        print(validated_data)
+        user = validated_data.get("user")
+        friend = validated_data.get("friend")
+
+        print("Raw incoming data:", user, friend)
 
         # Ensure both users are valid
         try:
-            user_instance = CustomUser.objects.get(username=user)
-            friend_instance = CustomUser.objects.get(username=friend)
+            user_instance = CustomUser.objects.get(email=user)
+            friend_instance = CustomUser.objects.get(email=friend)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User or friend does not exist.")
         
@@ -124,9 +128,21 @@ class FriendshipSerializer(serializers.Serializer):
         return friendship
     
     def validate(self, data):
-        """Ensure that a user cannot befriend themselves."""
-        if data["user"] == data["friend"]:
+        user = self.initial_data.get("user")
+        friend = self.initial_data.get("friend")
+        print("Raw incoming data:", user, friend)
+
+        try:
+            user_obj = CustomUser.objects.get(username=user)
+            friend_obj = CustomUser.objects.get(username=friend)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User or friend does not exist.")
+
+        if user_obj == friend_obj:
             raise serializers.ValidationError("You cannot befriend yourself.")
+
+        data["user"] = user_obj
+        data["friend"] = friend_obj
         return data
     
     def validate_friend(self, value):

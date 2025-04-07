@@ -101,12 +101,12 @@ class Friendship(models.Model):
 
     def save(self, *args, **kwargs):
         # Ensure user1 has a smaller ID to avoid duplicate mirrored friendships
-        if self.user1.id > self.user2.id:
-            self.user1, self.user2 = self.user2, self.user1
+        if self.user.id > self.friend.id:
+            self.user, self.friend = self.friend, self.user2
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.user1} ↔ {self.user2}"
+        return f"{self.user} ↔ {self.friend}"
 
 
 class Message(models.Model):
