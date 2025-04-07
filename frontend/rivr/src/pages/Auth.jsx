@@ -1,19 +1,17 @@
 import { Card, TextField, Button, Typography } from "@mui/material";
 import React, { useContext, useState, useEffect} from "react";
 import { AuthContext } from "../contexts/AuthContext";
-import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
 
 function Auth() {
-  const { login, register,setIsAuthenticated } = useContext(AuthContext);
-  const [isSwapped, setIsSwapped] = useState(false);
+  const { login, register, verifyData, verifyEmail, verifyTotp } = useContext(AuthContext);  const [isSwapped, setIsSwapped] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isConfirmingEmail, setIsConfirmingEmail] = useState(false);
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
-  const { isAuthenticated} = useContext(AuthContext)
+  // const { isAuthenticated} = useContext(AuthContext)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -43,63 +41,9 @@ function Auth() {
   }, []);
 
   const handleEmailVerification = async () => {
-    try{
-      const otp = verificationCode.join("")
-      if (otp.length !== 6) {
-        alert("Please enter a 6-digit code.");
-        return;
-      }
-      const {data} = await api.post('verifyEmail/', {otp, email});
-      if (!data || typeof data.message !== "string") {
-        throw new Error("Invalid response from server");
-      }
-      if (data.message === "Email verified successfully"){
-        console.log("EMAIL VERIFICATION SUCCESS");
-        handleUserRegistering()
-        setIsConfirmingEmail(false)
-        setIsConfirming(true)
-      }else {
-        alert("Verification failed. Please try again.");
-      }
-    }catch (error) {
-      console.error("Login verification error:", error);
-      setIsAuthenticated(false);
-      alert("Verification failed. Please try again.");
-    }
-  }
-  const handleDataVerification = async () => {
-    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-      alert("All fields are required.");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      alert("Please enter a valid email address.");
-      return;
-    }
-    try{
-      const {data} = await api.post("verifyData/", {username, password, email, firstName, lastName, dob})
-      if (!data || typeof data.message !== "string") {
-        throw new Error("Invalid response from server");
-      }
-      if (data === "Verification Email Sent"){
-        setIsConfirmingEmail(true)
-      }else{
-        alert("Data Verification failed. Please try again.");
-      }
-    }catch (error) {
-      alert(error?.error || "Registration failed");
-    }
-  }
-  const handleUserRegistering = async () => {
-    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-      alert("All fields are required.");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      alert("Please enter a valid email address.");
-      return;
-    }
     try {
+      const otp = verificationCode.join("");
+      await verifyEmail(otp, email);
       const [message, instructions, qrCodeURL, totp_uri] = await register(
         email,
         username,
@@ -108,19 +52,55 @@ function Auth() {
         lastName,
         dob
       );
-  
-      console.log("Message:", message);
-      console.log("Instructions:", instructions);
-      console.log("QR Code:", qrCodeURL);
-      console.log("TOTP URI:", totp_uri);
-  
       setQrCodeURL(qrCodeURL);
       settotpSecretKey(totp_uri);
+      setIsConfirmingEmail(false);
       setIsRegistering(true);
     } catch (error) {
-      alert(error?.error || "Registration failed");
+      alert(error.message);
     }
   };
+
+  const handleDataVerification = async () => {
+    try {
+      await verifyData(username, password, email, firstName, lastName, dob);
+      setIsConfirmingEmail(true);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  // const handleUserRegistering = async () => {
+  //   if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
+  //     alert("All fields are required.");
+  //     return;
+  //   }
+  //   if (!isValidEmail(email)) {
+  //     alert("Please enter a valid email address.");
+  //     return;
+  //   }
+  //   try {
+  //     const [message, instructions, qrCodeURL, totp_uri] = await register(
+  //       email,
+  //       username,
+  //       password,
+  //       firstName,
+  //       lastName,
+  //       dob
+  //     );
+  
+  //     console.log("Message:", message);
+  //     console.log("Instructions:", instructions);
+  //     console.log("QR Code:", qrCodeURL);
+  //     console.log("TOTP URI:", totp_uri);
+  
+  //     setQrCodeURL(qrCodeURL);
+  //     settotpSecretKey(totp_uri);
+  //     setIsRegistering(true);
+  //   } catch (error) {
+  //     alert(error?.error || "Registration failed");
+  //   }
+  // };
 
   const handleIsConfirming = () => {
     setIsConfirming(true);
@@ -148,7 +128,7 @@ function Auth() {
     }
   };
 
-  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleVirtualKeyPress = (value) => {
     const emptyIndex = verificationCode.findIndex((digit) => digit === "");
@@ -164,61 +144,34 @@ function Auth() {
     }
   };
   const handleLoginConfirmSignUp = async () => {
-    try{
-      const otp = verificationCode.join("")
-      if (otp.length !== 6) {
-        alert("Please enter a 6-digit code.");
-        return;
-      }
-      // const {data} = await api.post('verify-totp/', {otp, email});
-      // if (!data || typeof data.message !== "string") {
-      //   throw new Error("Invalid response from server");
-      // }
-      // if (data.message === "Account verified successfully"){
-      //   console.log("LOGIN VERIFICATION SUCCESS");
+    try {
+      const otp = verificationCode.join("");
+      await verifyTotp(otp, email);
       navigate("/home");
-      // }else {
-      //   alert("Verification failed. Please try again.");
-      // }
-    }catch (error) {
-      console.error("Login verification error:", error);
-      setIsAuthenticated(false);
-      alert("Verification failed. Please try again.");
+    } catch (error) {
+      alert(error.message);
     }
   };
   
   const handleRegisterConfirmSignUp = async () => {
-    try{
-      const otp = verificationCode.join("")
-      if (otp.length !== 6) {
-        alert("Please enter a 6-digit code.");
-        return;
-      }
-      const {data} = await api.post('verify-totp/', {otp, email});
-      if (!data || typeof data.message !== "string") {
-        throw new Error("Invalid response from server");
-      }
-      if (data.message === "Account verified successfully"){
-        console.log(" REGISTER VERIFICATION SUCCESS");
-        setIsSwapped(false);
-        setEmail("")
-        setPassword("")
-        setFirstName("")
-        setUsername("")
-        setLastName("")
-        setIsRegistering(false)
-        setIsConfirming(false)
-        setVerificationCode(["", "", "", "", "", ""])
-        setQrCodeURL("")
-        settotpSecretKey("")
-        console.log("RESET COMPLETE")
-      }else {
-        alert("Verification failed. Please try again.");
-      }
-    }catch (error) {
-      console.error("Registration verification error:", error);
-      setIsAuthenticated(false);
-      alert("Verification failed. Please try again.");
+    try {
+      const otp = verificationCode.join("");
+      await verifyTotp(otp, email);
+      // Reset state after successful registration
+      setIsSwapped(false);
+      setEmail("");
+      setPassword("");
+      setFirstName("");
+      setUsername("");
+      setLastName("");
+      setDob("");
+      setIsRegistering(false);
+      setIsConfirming(false);
+      setVerificationCode(["", "", "", "", "", ""]);
+      setQrCodeURL("");
+      settotpSecretKey("");
+    } catch (error) {
+      alert(error.message);
     }
   };
 
