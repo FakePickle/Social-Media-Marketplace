@@ -1,0 +1,15 @@
+meta {
+  name: show-totp
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{API_BASE_URL}}totp-qr/?email=sarath@gmail.com
+  body: none
+  auth: inherit
+}
+
+params:query {
+  email: sarath@gmail.com
+}

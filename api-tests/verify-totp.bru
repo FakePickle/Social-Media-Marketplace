@@ -1,0 +1,20 @@
+meta {
+  name: verify-totp
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{API_BASE_URL}}verify-totp/
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:json {
+  "email"
+}
+
+body:form-urlencoded {
+  email: sarath@gmail.com
+  otp: 648039
+}
