@@ -133,7 +133,38 @@ class Friendship(models.Model):
         return f"{self.user} ↔ {self.friend}"
 
 
+class Chat(models.Model):
+    user1 = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="chats_as_user1"
+    )
+    user2 = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="chats_as_user2"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user1", "user2"],
+                name="unique_user_chat"
+            )
+        ]
+
+    def __str__(self):
+        return f"Chat between {self.user1.username} and {self.user2.username}"
+
+    @staticmethod
+    def get_or_create_chat(user_a, user_b):
+        """Ensure chat is created only once per unique pair (regardless of order)"""
+        user1, user2 = sorted([user_a, user_b], key=lambda u: u.id)
+        chat, created = Chat.objects.get_or_create(user1=user1, user2=user2)
+        return chat
+
+
 class Message(models.Model):
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="messages", null=True, blank=True)
+
+
     sender = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="sent_messages"
     )
@@ -231,6 +262,8 @@ class Message(models.Model):
 
 
     def save(self, *args, **kwargs):
+        if not self.chat:
+            self.chat = Chat.get_or_create_chat(self.sender, self.receiver)
         super().save(*args, **kwargs)
 
     def __str__(self):

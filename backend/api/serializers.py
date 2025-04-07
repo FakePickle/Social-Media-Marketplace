@@ -3,7 +3,7 @@ from datetime import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
-from .models import (CustomUser, Friendship, Group, GroupMessage, Message,
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message,
                      OTPVerification)
 
 
@@ -70,6 +70,34 @@ class OTPVerificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OTPVerification
         fields = ["email", "otp"]
+
+
+class ChatSerializer(serializers.ModelSerializer):
+    user1 = serializers.SlugRelatedField(slug_field='username', queryset=CustomUser.objects.all())
+    user2 = serializers.SlugRelatedField(slug_field='username', queryset=CustomUser.objects.all())
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Chat
+        fields = ['id', 'user1', 'user2', 'created_at', 'messages']
+
+    def create(self, validated_data):
+        """Create a new chat instance"""
+        user1 = validated_data["user1"]
+        user2 = validated_data["user2"]
+
+        # Ensure both users are valid
+        try:
+            user1_instance = CustomUser.objects.get(username=user1)
+            user2_instance = CustomUser.objects.get(username=user2)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User1 or User2 does not exist.")
+
+        # Create the chat instance
+        chat = Chat.objects.create(user1=user1_instance, user2=user2_instance)
+
+        return chat
+        
 
 
 class MessageSerializer(serializers.ModelSerializer):
