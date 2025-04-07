@@ -1,8 +1,10 @@
 from datetime import timezone
+
 import pyotp
 from rest_framework import serializers
 
-from .models import CustomUser, Message, OTPVerification, Friendship, Group, GroupMessage
+from .models import (CustomUser, Friendship, Group, GroupMessage, Message,
+                     OTPVerification)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -35,19 +37,20 @@ class RegisterSerializer(serializers.ModelSerializer):
             first_name=validated_data["first_name"],
             last_name=validated_data["last_name"],
             phone_number=validated_data.get("phone_number", ""),
-            bio=validated_data.get("bio", "")
+            bio=validated_data.get("bio", ""),
         )
-        
+
         # Set password and save to get user ID
         user.set_password(validated_data["password"])
         user.save()
-        
+
+        user.generate_keys()
         # Generate TOTP secret for 2FA
         user.generate_totp_secret()
-        
+
         # Create OTP verification record
         OTPVerification.objects.create(user=user)
-            
+
         return user
 
 
@@ -63,7 +66,7 @@ class LoginSerializer(serializers.ModelSerializer):
 class OTPVerificationSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     otp = serializers.CharField(max_length=6, required=True)
-    
+
     class Meta:
         model = OTPVerification
         fields = ["email", "otp"]
@@ -73,7 +76,7 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ["id", "sender", "receiver", "content", "timestamp"]
-    
+
     def create(self, validated_data):
         """Create a new message"""
         sender = validated_data["sender"]
@@ -86,11 +89,11 @@ class MessageSerializer(serializers.ModelSerializer):
             receiver_user = CustomUser.objects.get(username=receiver)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("Sender or receiver does not exist.")
-        
+
         # Create the message instance
         validated_data["sender"] = sender_user
         validated_data["receiver"] = receiver_user
-        
+
         message = Message().encrypt_message(message, sender_user, receiver_user)
         print(f"Encrypted message: {message}")
         print("Decrypted message:", Message.decrypt_message(message))
@@ -107,7 +110,6 @@ class FriendshipSerializer(serializers.Serializer):
         model = Friendship
         fields = ["user", "friend", "created_at"]
 
-
     def create(self, validated_data):
         """Create a new friendship"""
         # print(validated_data)
@@ -122,33 +124,35 @@ class FriendshipSerializer(serializers.Serializer):
             friend_instance = CustomUser.objects.get(email=friend)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User or friend does not exist.")
-        
+
         # Create the friendship instance
-        friendship = Friendship.objects.create(user=user_instance, friend=friend_instance)
+        friendship = Friendship.objects.create(
+            user=user_instance, friend=friend_instance
+        )
         return friendship
-    
+
     def update_friendship(self, validated_data):
         """Update friendship status"""
         user = validated_data.get("user")
         friend = validated_data.get("friend")
         status = validated_data.get("status")
 
-        if (status != "accepted" and status != "rejected"):
+        if status != "accepted" and status != "rejected":
             raise serializers.ValidationError("Invalid status.")
-        
+
         # Ensure both users are valid
         try:
             user_instance = CustomUser.objects.get(username=user)
             friend_instance = CustomUser.objects.get(username=friend)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User or friend does not exist.")
-        
+
         # Set status of friendship
         friendship = Friendship.objects.get(user=user_instance, friend=friend_instance)
         friendship.status = status
         friendship.save()
         return friendship
-    
+
     def validate(self, data):
         user = self.initial_data.get("user")
         friend = self.initial_data.get("friend")
@@ -166,7 +170,7 @@ class FriendshipSerializer(serializers.Serializer):
         data["user"] = user_obj
         data["friend"] = friend_obj
         return data
-    
+
     def validate_friend(self, value):
         """Ensure that the friend exists."""
         try:
@@ -174,7 +178,7 @@ class FriendshipSerializer(serializers.Serializer):
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("Friend does not exist.")
         return value
-    
+
     def delete(self, instance):
         """Delete a friendship."""
         try:
@@ -240,18 +244,22 @@ class GroupMessageSerializer(serializers.ModelSerializer):
             group_instance = Group.objects.get(name=group)
         except (CustomUser.DoesNotExist, Group.DoesNotExist):
             raise serializers.ValidationError("Sender or group does not exist.")
-        
+
         # Create the group message instance
         validated_data["sender"] = sender_user
         validated_data["group"] = group_instance
-        
+
         message = GroupMessage().encrypt_message(message, group_instance)
         print(f"Encrypted group message: {message}")
-        print("Decrypted group message:", GroupMessage.decrypt_message(message, group_instance))
-        
+        print(
+            "Decrypted group message:",
+            GroupMessage.decrypt_message(message, group_instance),
+        )
+
         # Save the group message to the database
         validated_data["content"] = message
         validated_data["timestamp"] = timezone.now()
 
         group_message = GroupMessage.objects.create(**validated_data)
         return group_message
+

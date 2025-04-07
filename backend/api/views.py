@@ -1,9 +1,9 @@
 import base64
 import io
 
-from django.shortcuts import get_object_or_404
 import qrcode
 from django.contrib.auth import authenticate
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status
@@ -12,13 +12,23 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CustomUser, OTPVerification
-from .serializers import (LoginSerializer, OTPVerificationSerializer,
-                          RegisterSerializer, MessageSerializer, GroupSerializer,
-                          FriendshipSerializer, GroupMessageSerializer)
-from .models import (CustomUser, OTPVerification,
-                     Message, Group, GroupMessage,
-                     Friendship)
+from .models import (
+    CustomUser,
+    Friendship,
+    Group,
+    GroupMessage,
+    Message,
+    OTPVerification,
+)
+from .serializers import (
+    FriendshipSerializer,
+    GroupMessageSerializer,
+    GroupSerializer,
+    LoginSerializer,
+    MessageSerializer,
+    OTPVerificationSerializer,
+    RegisterSerializer,
+)
 
 
 class RegisterView(APIView):
@@ -44,7 +54,7 @@ class RegisterView(APIView):
                     "message": "Account created successfully. You need to verify your account using an authenticator app.",
                     "instructions": "1. Scan the QR code with your authenticator app (e.g., Google Authenticator, Authy).\n2. Enter the code from your app to verify your account.",
                     "qr_code": f"data:image/png;base64,{qr_code}",
-                    "totp_uri": user.get_totp_uri(),
+                    "secret_key": user.get_secret(),
                     "email": user.email,
                     "verification_endpoint": "/api/verify-totp/",
                 },
@@ -191,7 +201,9 @@ class FriendshipView(APIView):
         Get all friendships for the current user.
         """
         user = request.user
-        friendships = Friendship.objects.filter(user=user) | Friendship.objects.filter(friend=user)
+        friendships = Friendship.objects.filter(user=user) | Friendship.objects.filter(
+            friend=user
+        )
         serializer = self.serializer_class(friendships, many=True)
         return Response(serializer.data)
 
@@ -206,9 +218,11 @@ class FriendshipView(APIView):
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             friendship = serializer.save()
-            return Response(self.serializer_class(friendship).data, status=status.HTTP_201_CREATED)
+            return Response(
+                self.serializer_class(friendship).data, status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     def delete(self, request):
         """
         Delete a friendship.
@@ -216,13 +230,19 @@ class FriendshipView(APIView):
         request_user = request.data.get("user")
         friend_user = request.data.get("friend")
         if not request_user or not friend_user:
-            return Response({"error": "Both user and friend are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Both user and friend are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             try:
                 serializer.delete(request.data)
             except Friendship.DoesNotExist:
-                return Response({"error": "Friendship does not exist."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Friendship does not exist."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -238,7 +258,9 @@ class MessageView(APIView):
         Limit the messages to those sent or received by the current user.
         """
         user = self.request.user
-        return Message.objects.filter(sender=user) | Message.objects.filter(receiver=user)
+        return Message.objects.filter(sender=user) | Message.objects.filter(
+            receiver=user
+        )
 
     def post(self, request, *args, **kwargs):
         """
@@ -246,17 +268,21 @@ class MessageView(APIView):
         """
 
         # If sender is sending message to group
-        if (request.data.get("sender") and request.data.get("group")):
+        if request.data.get("sender") and request.data.get("group"):
             serializer = self.groupserializer(data=request.data)
             if serializer.is_valid():
                 message = serializer.create(request.data)
-                return Response(self.groupserializer(message).data, status=status.HTTP_201_CREATED)
+                return Response(
+                    self.groupserializer(message).data, status=status.HTTP_201_CREATED
+                )
         # If sender is sending message to a user
         elif request.data.get("sender") and request.data.get("receiver"):
             serializer = self.dmserializer(data=request.data)
             if serializer.is_valid():
                 message = serializer.create(request.data)
-                return Response(self.dmserializer(message).data, status=status.HTTP_201_CREATED)
+                return Response(
+                    self.dmserializer(message).data, status=status.HTTP_201_CREATED
+                )
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -265,11 +291,16 @@ class MessageView(APIView):
         # Retriving messages for Group
         if kwargs.get("group"):
             group = get_object_or_404(Group, pk=kwargs["group"])
-            message = get_object_or_404(self.get_queryset(), pk=kwargs["pk"], group=group)
+            message = get_object_or_404(
+                self.get_queryset(), pk=kwargs["pk"], group=group
+            )
 
             if request.user not in group.members.all():
-                return Response({"detail": "Not authorized to view this message."}, status=status.HTTP_403_FORBIDDEN)
-            
+                return Response(
+                    {"detail": "Not authorized to view this message."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             # Try to decrypt the message
             try:
                 decrypted_content = GroupMessage.decrypt_message(message.content, group)
@@ -283,17 +314,24 @@ class MessageView(APIView):
         else:
             # Check if the user is sender or receiver
             if not (request.user == message.sender or request.user == message.receiver):
-                return Response({"detail": "Not authorized to view this message."}, status=status.HTTP_403_FORBIDDEN)
-
+                return Response(
+                    {"detail": "Not authorized to view this message."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
             message = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
 
             if message.sender != request.user and message.receiver != request.user:
-                return Response({"detail": "Not authorized to view this message."}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"detail": "Not authorized to view this message."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
             # Try to decrypt the message
             try:
-                decrypted_content = Message.decrypt_message(message.content, message.sender, message.receiver)
+                decrypted_content = Message.decrypt_message(
+                    message.content, message.sender, message.receiver
+                )
             except Exception as e:
                 decrypted_content = "Unable to decrypt message: " + str(e)
 

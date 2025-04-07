@@ -100,6 +100,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             issuer_name="Rivr",
         )
 
+    def get_secret(self):
+        return self.totp_secret
+
 
 class OTPVerification(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
