@@ -61,6 +61,8 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 .my.cnf
+.jwt_private.pem
+.jwt_public.pem
 
 # Flask stuff:
 instance/

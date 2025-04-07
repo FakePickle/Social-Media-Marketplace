@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import TopNav from "../Components/TopNav";
-import Sidebar from "../Components/Sidebar";
-import Chats from "../Components/Chats";
-import Search from "../Components/Search";
-import Marketplace from "../Components/Marketplace";
-import Settings from "../Components/Settings";
-import Account from "../Components/Account";
+import TopNav from "../components/TopNav";
+import Sidebar from "../components/Sidebar";
+import Chats from "../components/Chats";
+import Search from "../components/Search";
+import Marketplace from "../components/Marketplace";
+import Settings from "../components/Settings";
+import Account from "../components/Account";
 const Home = () => {
   const [currentTab, setCurrentTab] = useState("Messages");
   const [expanded, setExpanded] = useState(true);

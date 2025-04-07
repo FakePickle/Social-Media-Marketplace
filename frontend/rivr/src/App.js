@@ -1,13 +1,18 @@
-import './App.css';
-import Auth from './Pages/Auth';
-import Home from './Pages/Home';
-import ProtectedRoute from './Components/ProtectedRoute';
-import AdminDashboard from './Pages/AdminDashboard';
-import AdminRoute from './Components/AdminRoute';
-import UserVerificationPage from './Pages/UserVerificationPage';
-import AdminAuth from './Pages/AdminAuth';
-import {BrowserRouter as Router, Routes, Route, Navigate} from "react-router-dom";
-import { useState } from 'react';
+import "./App.css";
+import Auth from "./pages/Auth";
+import Home from "./pages/Home";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminRoute from "./components/AdminRoute";
+import UserVerificationPage from "./pages/UserVerificationPage";
+import AdminAuth from "./pages/AdminAuth";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { useState } from "react";
 function App() {
   const isAuthenticated = localStorage.getItem("token") !== null;
   const user = JSON.parse(localStorage.getItem("user"));
@@ -45,7 +50,7 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/auth" element={<Auth />} />
-        <Route path="/admin_auth" element={<AdminAuth />}/>
+        <Route path="/admin_auth" element={<AdminAuth />} />
         {/* Protected Routes */}
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route path="/home" element={<Home />} />
@@ -55,11 +60,26 @@ function App() {
 
         {/* Admin Routes */}
         {/* <Route element={<AdminRoute user={user} />}> */}
-          <Route path="/admin" element={<AdminDashboard userList={userList}/>} />
-          <Route path="/admin/document-verifications/id/:id" element={<UserVerificationPage userList={userList} setUserList={setUserList} />} />
+        <Route path="/admin" element={<AdminDashboard userList={userList} />} />
+        <Route
+          path="/admin/document-verifications/id/:id"
+          element={
+            <UserVerificationPage
+              userList={userList}
+              setUserList={setUserList}
+            />
+          }
+        />
         {/* </Route> */}
         {/* Redirect all unknown routes to Auth */}
-        <Route path="*" element={<h1 style={{ color: "white", backgroundColor:"#0D1B2A" }}>404 Not Found</h1>} />
+        <Route
+          path="*"
+          element={
+            <h1 style={{ color: "white", backgroundColor: "#0D1B2A" }}>
+              404 Not Found
+            </h1>
+          }
+        />
       </Routes>
     </Router>
   );

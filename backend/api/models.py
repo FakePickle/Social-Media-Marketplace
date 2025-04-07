@@ -1,5 +1,9 @@
+import pyotp
 from cryptography.fernet import Fernet
-from django.contrib.auth.models import AbstractUser
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes, serialization
+from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 
 # Generate a key for encryption
@@ -7,10 +11,32 @@ key = Fernet.generate_key()
 cipher = Fernet(key)
 
 
-class CustomUser(AbstractUser):
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, username, password=None, **extra_fields):
+        if not email:
+            raise ValueError('Email is required')
+        email = self.normalize_email(email)
+        user = self.model(email=email, username=username, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+        
+    def create_superuser(self, email, username, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+        
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+            
+        return self.create_user(email, username, password, **extra_fields)
+
+
+class CustomUser(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)
-    password = models.CharField(max_length=128)
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=150)
     dob = models.DateField(null=True, blank=True)
@@ -19,21 +45,68 @@ class CustomUser(AbstractUser):
     profile_picture = models.ImageField(
         upload_to="profile_pics/", null=True, blank=True
     )
+    private_key = models.TextField(null=True, blank=True)
+    public_key = models.TextField(null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
-    public_key = models.TextField(blank=True)
-    private_key = models.TextField(blank=True)
+    totp_secret = models.CharField(max_length=32, blank=True)
     is_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+    date_joined = models.DateTimeField(auto_now_add=True)
+
+    objects = CustomUserManager()
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
 
     def __str__(self):
-        return self.username
+        return self.email
 
     def get_full_name(self):
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}".strip()
 
-    def generate_keys(self):
-        # Generate public and private keys for encryption
-        pass
+    def get_short_name(self):
+        return self.first_name
+
+    def generate_totp_secret(self):
+        if not self.totp_secret:
+            self.totp_secret = pyotp.random_base32()
+            self.save()
+
+    def get_totp_uri(self):
+        return pyotp.totp.TOTP(self.totp_secret).provisioning_uri(
+            name=self.username,
+            issuer_name="Rivr",
+        )
+
+
+class OTPVerification(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_verified = models.BooleanField(default=False)
+
+    def verify_otp(self, otp):
+        totp = pyotp.TOTP(self.user.totp_secret)
+        return totp.verify(otp)
+
+
+class Friendship(models.Model):
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="friendship_user1"
+    )
+    friend = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="friendship_user2"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Ensure user1 has a smaller ID to avoid duplicate mirrored friendships
+        if self.user.id > self.friend.id:
+            self.user, self.friend = self.friend, self.user2
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user} ↔ {self.friend}"
 
 
 class Message(models.Model):
@@ -46,12 +119,158 @@ class Message(models.Model):
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
 
-    def encrypt_message(self):
-        self.content = cipher.encrypt(self.content.encode()).decode()
+    @staticmethod
+    def encrypt_message(plain_text, sender, receiver):
+        from cryptography.hazmat.primitives import serialization
 
-    def decrypt_message(self):
-        return cipher.decrypt(self.content.encode()).decode()
+        # Load senders private key
+        private_key = serialization.load_pem_private_key(
+            sender.private_key.encode(),
+            password=None
+        )
+        # Encrypt the message using the sender's private key
+        encrypted = private_key.encrypt(
+            plain_text.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        public_key = serialization.load_pem_public_key(
+            receiver.public_key.encode()
+        )
+        # Encrypt the message using the receiver's public key
+        encrypted = public_key.encrypt(
+            encrypted,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        # Return the encrypted message as a hex string
+        return encrypted.hex()
+
+    @staticmethod
+    def decrypt_message(encrypted_message: bytes, sender: CustomUser, receiver: CustomUser):
+        from cryptography.hazmat.primitives import serialization
+
+        # Load the sender's public key
+        public_key = serialization.load_pem_public_key(
+            sender.public_key.encode(),
+        )
+        # Decrypt the message using the sender's public key
+        decrypted = public_key.decrypt(
+            bytes.fromhex(encrypted_message),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        # Load the receiver's private key
+        private_key = serialization.load_pem_private_key(
+            receiver.private_key.encode(),
+            password=None
+        )
+        # Decrypt the message using the receiver's private key
+        decrypted = private_key.decrypt(
+            decrypted,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        # Return the decrypted message as a string
+        return decrypted.decode()
 
     def save(self, *args, **kwargs):
-        self.encrypt_message()
+        if not self.content.startswith("-----BEGIN"):  # Only encrypt plain text
+            self.encrypt_message(self.content)
         super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Message from {self.sender} to {self.receiver} at {self.timestamp}"
+
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    private_key = models.TextField(null=True, blank=True)  # For group encryption
+    public_key = models.TextField(null=True, blank=True)  # For group decryption
+    is_public = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        CustomUser,  # Assuming CustomUser is in the same app
+        on_delete=models.CASCADE,
+        related_name="created_groups"
+    )
+    members = models.ManyToManyField(
+        CustomUser,
+        related_name="group_members"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class GroupMessage(models.Model):
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="messages"
+    )
+    sender = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="group_messages_sent"
+    )
+    content = models.TextField()  # Will store encrypted content
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def encrypt_message(plain_text: str, group: Group):
+        """
+        Encrypt message using sender's public key (for authenticity) and 
+        group members' public keys (for confidentiality).
+        In a real system, you'd likely use symmetric encryption with a shared key 
+        or hybrid encryption for efficiency.
+        """
+        # For simplicity, we'll use sender's public key here
+        # In practice, you'd want to encrypt for all group members
+        private_key = serialization.load_pem_private_key(
+            group.private_key.encode()
+        )
+        encrypted = private_key.encrypt(
+            plain_text.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return encrypted.hex()
+
+    @staticmethod
+    def decrypt_message(encrypted_message, group: Group):
+        """
+        Decrypt message using receiver's private key.
+        Assumes message was encrypted with sender's public key.
+        """
+        public_key = serialization.load_pem_public_key(
+            group.public_key.encode(),
+            password=None
+        )
+        decrypted = public_key.decrypt(
+            bytes.fromhex(encrypted_message),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return decrypted.decode()
+
