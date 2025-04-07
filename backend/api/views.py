@@ -14,9 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import (CustomUser, Friendship, Group, GroupMessage, Message,
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message,
                      OTPVerification)
-from .serializers import (FriendshipSerializer, GroupMessageSerializer,
+from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
                           GroupSerializer, LoginSerializer, MessageSerializer,
                           OTPVerificationSerializer, RegisterSerializer)
 
@@ -237,6 +237,26 @@ class FriendshipView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ChatListCreateView(APIView):
+
+    def get(self, request):
+        user = request.data.get("user")
+        user = get_object_or_404(CustomUser, username=user)
+        # Get all chats for the current user
+        chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
+        if not chats.exists():
+            return Response({"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ChatSerializer(chats, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ChatSerializer(data=request.data)
+        if serializer.is_valid():
+            chat = serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class MessageView(APIView):
     queryset = Message.objects.all()
     dmserializer = MessageSerializer
@@ -356,6 +376,17 @@ class MessageView(APIView):
 
 class GroupCreateView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        user = request.data.get("user")
+
+        user_instance = get_object_or_404(CustomUser, username=user)
+        # Get all groups for the current user
+        groups = Group.objects.filter(members=user_instance)
+        if not groups.exists():
+            return Response({"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data)
 
     def post(self, request):
         serializer = GroupSerializer(data=request.data)
