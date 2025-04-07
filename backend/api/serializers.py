@@ -39,7 +39,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             phone_number=validated_data.get("phone_number", ""),
             bio=validated_data.get("bio", ""),
         )
-        
 
         # Set password and save to get user ID
         user.set_password(validated_data["password"])
@@ -75,22 +74,20 @@ class OTPVerificationSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = serializers.SlugRelatedField(
-        slug_field='username',
-        queryset=CustomUser.objects.all()
+        slug_field="username", queryset=CustomUser.objects.all()
     )
     receiver = serializers.SlugRelatedField(
-        slug_field='username',
-        queryset=CustomUser.objects.all()
+        slug_field="username", queryset=CustomUser.objects.all()
     )
 
     class Meta:
         model = Message
         fields = ["sender", "receiver", "content", "timestamp"]
-    
+
     def create(self, validated_data):
         sender_user = validated_data["sender"]
         receiver_user = validated_data["receiver"]
-        plain_text = validated_data["content"]
+        content = validated_data["content"]
 
         # Check if sender and receiver are valid users
         try:
@@ -102,17 +99,16 @@ class MessageSerializer(serializers.ModelSerializer):
         # Create the message instance
         validated_data["sender"] = sender_user
         validated_data["receiver"] = receiver_user
+        validated_data["content"] = content
 
-        message = Message().encrypt_message(message, sender_user, receiver_user)
+        message = Message().encrypt_message(content, sender_user, receiver_user)
         print(f"Encrypted message: {message}")
-        print("Decrypted message:", Message.decrypt_message(message))
         # Save the message to the database
         validated_data["content"] = message
-        validated_data["timestamp"] = timezone.now()
+        validated_data["timestamp"] = timezone.utc
 
         return Message.objects.create(**validated_data)
 
-    
     def validate(self, attrs):
         """Ensure sender and receiver are not the same"""
         print(attrs)
@@ -278,4 +274,3 @@ class GroupMessageSerializer(serializers.ModelSerializer):
 
         group_message = GroupMessage.objects.create(**validated_data)
         return group_message
-
