@@ -97,6 +97,7 @@ class Friendship(models.Model):
     friend = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="friendship_user2"
     )
+    is_accepted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):

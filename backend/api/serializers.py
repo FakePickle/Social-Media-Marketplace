@@ -127,6 +127,28 @@ class FriendshipSerializer(serializers.Serializer):
         friendship = Friendship.objects.create(user=user_instance, friend=friend_instance)
         return friendship
     
+    def update_friendship(self, validated_data):
+        """Update friendship status"""
+        user = validated_data.get("user")
+        friend = validated_data.get("friend")
+        status = validated_data.get("status")
+
+        if (status != "accepted" and status != "rejected"):
+            raise serializers.ValidationError("Invalid status.")
+        
+        # Ensure both users are valid
+        try:
+            user_instance = CustomUser.objects.get(username=user)
+            friend_instance = CustomUser.objects.get(username=friend)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User or friend does not exist.")
+        
+        # Set status of friendship
+        friendship = Friendship.objects.get(user=user_instance, friend=friend_instance)
+        friendship.status = status
+        friendship.save()
+        return friendship
+    
     def validate(self, data):
         user = self.initial_data.get("user")
         friend = self.initial_data.get("friend")
