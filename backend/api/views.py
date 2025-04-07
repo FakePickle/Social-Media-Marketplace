@@ -1,11 +1,10 @@
+import ast
 import base64
 import io
 
-from django.db.models import Q
-
-from django.shortcuts import get_object_or_404
 import qrcode
 from django.contrib.auth import authenticate
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
@@ -15,23 +14,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import (
-    CustomUser,
-    Friendship,
-    Group,
-    GroupMessage,
-    Message,
-    OTPVerification,
-)
-from .serializers import (
-    FriendshipSerializer,
-    GroupMessageSerializer,
-    GroupSerializer,
-    LoginSerializer,
-    MessageSerializer,
-    OTPVerificationSerializer,
-    RegisterSerializer,
-)
+from .models import (CustomUser, Friendship, Group, GroupMessage, Message,
+                     OTPVerification)
+from .serializers import (FriendshipSerializer, GroupMessageSerializer,
+                          GroupSerializer, LoginSerializer, MessageSerializer,
+                          OTPVerificationSerializer, RegisterSerializer)
 
 
 class RegisterView(APIView):
@@ -257,15 +244,17 @@ class MessageView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, pk=None, group=None):
-        user_username = request.data.get("user")
+        sender_username = request.data.get("sender")
         receiver_username = request.data.get("receiver")
 
         if group is not None:
             group_obj = get_object_or_404(Group, pk=group)
             message = get_object_or_404(Message, pk=pk, group=group_obj)
 
-            if not group_obj.members.filter(username=user_username).exists():
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            if not group_obj.members.filter(username=sender_username).exists():
+                return Response(
+                    {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
+                )
 
             try:
                 decrypted = GroupMessage.decrypt_message(message.content, group_obj)
@@ -277,20 +266,22 @@ class MessageView(APIView):
             return Response(data)
 
         # If sender and receiver are provided (DM chat history)
-        if user_username and receiver_username:
+        if sender_username and receiver_username:
             try:
-                user = CustomUser.objects.get(username=user_username)
+                user = CustomUser.objects.get(username=sender_username)
                 receiver = CustomUser.objects.get(username=receiver_username)
             except CustomUser.DoesNotExist:
-                return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
+                )
 
             # Get all messages between the two users
             messages = Message.objects.filter(
-                (Q(sender=user) & Q(receiver=receiver)) | (Q(sender=receiver) & Q(receiver=user))
+                (Q(sender=user) & Q(receiver=receiver))
+                | (Q(sender=receiver) & Q(receiver=user))
             ).order_by("timestamp")
 
             response_data = []
-            import ast
 
             for msg in messages:
                 try:
@@ -299,7 +290,7 @@ class MessageView(APIView):
                         content_dict["ciphertext"],
                         content_dict["signature"],
                         msg.sender,
-                        msg.receiver
+                        msg.receiver,
                     )
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
@@ -313,17 +304,23 @@ class MessageView(APIView):
         # ✅ If `pk` is given (get single DM message)
         if pk is not None:
             message = get_object_or_404(Message, pk=pk)
-            if user_username != message.sender.username and user_username != message.receiver.username:
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            if (
+                sender_username != message.sender.username
+                and sender_username != message.receiver.username
+            ):
+                return Response(
+                    {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
+                )
 
             import ast
+
             try:
                 content_dict = ast.literal_eval(message.content)
                 decrypted = Message.decrypt_message(
-                    content_dict['ciphertext'],
-                    content_dict['signature'],
+                    content_dict["ciphertext"],
+                    content_dict["signature"],
                     message.sender,
-                    message.receiver
+                    message.receiver,
                 )
             except Exception as e:
                 decrypted = f"Unable to decrypt message: {e}"
@@ -334,52 +331,27 @@ class MessageView(APIView):
 
         return Response({"detail": "Bad request"}, status=status.HTTP_400_BAD_REQUEST)
 
-    
     def post(self, request):
+        serializer = None
+
         if request.data.get("sender") and request.data.get("group"):
             serializer = GroupMessageSerializer(data=request.data)
-            if serializer.is_valid():
-                message = serializer.save()
-                return Response(GroupMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
         elif request.data.get("sender") and request.data.get("receiver"):
             serializer = MessageSerializer(data=request.data)
+
+        if serializer is not None:
             if serializer.is_valid():
                 message = serializer.save()
-                return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def retrieve(self, request, pk=None, group=None):
-        if group:
-            group_obj = get_object_or_404(Group, pk=group)
-            message = get_object_or_404(Message, pk=pk, group=group_obj)
-
-            if request.user not in group_obj.members.all():
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
-
-            try:
-                decrypted = GroupMessage.decrypt_message(message.content, group_obj)
-            except Exception as e:
-                decrypted = f"Unable to decrypt message: {e}"
-
-            data = GroupMessageSerializer(message).data
-            data["decrypted_content"] = decrypted
-            return Response(data)
-        else:
-            message = get_object_or_404(Message, pk=pk)
-
-            if request.user != message.sender and request.user != message.receiver:
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
-
-            try:
-                decrypted = Message.decrypt_message(message.content, message.sender, message.receiver)
-            except Exception as e:
-                decrypted = f"Unable to decrypt message: {e}"
-
-            data = MessageSerializer(message).data
-            data["decrypted_content"] = decrypted
-            return Response(data)
+        return Response(
+            {
+                "error": "Invalid request: sender and group or sender and receiver required."
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class GroupCreateView(APIView):
