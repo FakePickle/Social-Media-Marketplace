@@ -77,12 +77,12 @@ function Auth() {
   };
 
   const handleLogin = async () => {
-    if (!username.trim()) {
-      alert("Username and password cannot be empty");
+    if (!email.trim()) {
+      alert("Email and password cannot be empty");
       return;
     }
     try {
-      await login(username, password);
+      await login(email, password);
       setIsConfirming(true)
       
     } catch (err) {
@@ -120,7 +120,6 @@ function Auth() {
         alert("Please enter a 6-digit code.");
         return;
       }
-      const email = username
       const {data} = await api.post('verify-totp/', {otp, email});
       if (!data || typeof data.message !== "string") {
         throw new Error("Invalid response from server");
@@ -294,7 +293,7 @@ function Auth() {
                 variant="outlined"
                 fullWidth
                 sx={{ marginBottom: "10px" }}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={handleKeyDown}
               />
               <TextField
