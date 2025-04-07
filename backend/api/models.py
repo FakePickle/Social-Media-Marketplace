@@ -91,20 +91,13 @@ class OTPVerification(models.Model):
 
 
 class Friendship(models.Model):
-    user1 = models.ForeignKey(
+    user = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="friendship_user1"
     )
-    user2 = models.ForeignKey(
+    friend = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="friendship_user2"
     )
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user1", "user2"], name="unique_friendship"
-            )
-        ]
 
     def save(self, *args, **kwargs):
         # Ensure user1 has a smaller ID to avoid duplicate mirrored friendships

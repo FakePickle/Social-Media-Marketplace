@@ -2,7 +2,7 @@ from datetime import timezone
 import pyotp
 from rest_framework import serializers
 
-from .models import CustomUser, Message, OTPVerification
+from .models import CustomUser, Message, OTPVerification, Friendship, Group, GroupMessage
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -100,3 +100,48 @@ class MessageSerializer(serializers.ModelSerializer):
 
         message = Message.objects.create(**validated_data)
         return message
+
+
+class FriendshipSerializer(serializers.Serializer):
+    class Meta:
+        model = Friendship
+        fields = ["user", "friend"]
+
+    def create(self, validated_data):
+        """Create a new friendship"""
+        user = validated_data["user"]
+        friend = validated_data["friend"]
+
+        # Ensure both users are valid
+        try:
+            user_instance = CustomUser.objects.get(username=user)
+            friend_instance = CustomUser.objects.get(username=friend)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User or friend does not exist.")
+        
+        # Create the friendship instance
+        friendship = Friendship.objects.create(user=user_instance, friend=friend_instance)
+        return friendship
+    
+    def validate(self, data):
+        """Ensure that a user cannot befriend themselves."""
+        if data["user"] == data["friend"]:
+            raise serializers.ValidationError("You cannot befriend yourself.")
+        return data
+    
+    def validate_friend(self, value):
+        """Ensure that the friend exists."""
+        try:
+            CustomUser.objects.get(username=value)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("Friend does not exist.")
+        return value
+    
+    def delete(self, instance):
+        """Delete a friendship."""
+        try:
+            friendship = Friendship.objects.get(user=instance.user, friend=instance.friend)
+            friendship.delete()
+            return friendship
+        except Friendship.DoesNotExist:
+            raise serializers.ValidationError("Friendship does not exist.")
