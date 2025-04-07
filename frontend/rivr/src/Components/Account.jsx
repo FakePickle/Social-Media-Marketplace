@@ -37,7 +37,7 @@ function Account({ anchorEl, handleClose }) {
 
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
         <img
-          src="paste the url here..." 
+          src="profile_pic.png" 
           alt="Profile"
           style={{
             width: "100px",
