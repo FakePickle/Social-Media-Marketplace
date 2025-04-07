@@ -199,7 +199,7 @@ class FriendshipView(APIView):
         """
         Create a new friendship.
         """
-        print(request.data)
+        # print(request.data)
         # print("Incoming data:", request.data)
         data = request.data.copy()
         # print("Data after copy:", data)
@@ -209,7 +209,7 @@ class FriendshipView(APIView):
             return Response(self.serializer_class(friendship).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def delete(self, request, pk):
+    def delete(self, request):
         """
         Delete a friendship.
         """
@@ -217,9 +217,14 @@ class FriendshipView(APIView):
         friend_user = request.data.get("friend")
         if not request_user or not friend_user:
             return Response({"error": "Both user and friend are required."}, status=status.HTTP_400_BAD_REQUEST)
-        friendship = get_object_or_404(self.queryset, pk=pk)
-        friendship.delete(request.data)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            try:
+                serializer.delete(request.data)
+            except Friendship.DoesNotExist:
+                return Response({"error": "Friendship does not exist."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MessageView(APIView):

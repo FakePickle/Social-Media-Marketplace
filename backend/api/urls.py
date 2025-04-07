@@ -20,5 +20,5 @@ urlpatterns = [
     path('groups/<int:pk>/', GroupDetailView.as_view(), name='group-detail'),
     path('groups/<int:pk>/members/', GroupMemberUpdateView.as_view(), name='update-group-members'),
     path('friendships/', FriendshipView.as_view(), name='friendship-list-create'),
-    path('friendships/<int:pk>/', FriendshipView.as_view(), name='friendship-delete')
+    path('friendships/delete/', FriendshipView.as_view(), name='friendship-delete')
 ]

@@ -110,11 +110,11 @@ class FriendshipSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         """Create a new friendship"""
-        print(validated_data)
+        # print(validated_data)
         user = validated_data.get("user")
         friend = validated_data.get("friend")
 
-        print("Raw incoming data:", user, friend)
+        # print("Raw incoming data:", user, friend)
 
         # Ensure both users are valid
         try:
@@ -130,7 +130,7 @@ class FriendshipSerializer(serializers.Serializer):
     def validate(self, data):
         user = self.initial_data.get("user")
         friend = self.initial_data.get("friend")
-        print("Raw incoming data:", user, friend)
+        # print("Raw incoming data:", user, friend)
 
         try:
             user_obj = CustomUser.objects.get(username=user)
@@ -156,7 +156,12 @@ class FriendshipSerializer(serializers.Serializer):
     def delete(self, instance):
         """Delete a friendship."""
         try:
-            friendship = Friendship.objects.get(user=instance.get("user"), friend=instance.get("friend"))
+            user = CustomUser.objects.get(username=instance.get("user"))
+            friend = CustomUser.objects.get(username=instance.get("friend"))
+            friendship = Friendship.objects.get(user=user, friend=friend)
+            # Ensure the friendship exists before deleting
+            if not friendship:
+                raise serializers.ValidationError("Friendship does not exist.")
             friendship.delete()
             return friendship
         except Friendship.DoesNotExist:
