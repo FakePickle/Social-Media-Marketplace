@@ -1,0 +1,16 @@
+meta {
+  name: show-messages
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{API_BASE_URL}}messages/
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  sender: sarath123456
+  receiver: asdfasdf
+}
