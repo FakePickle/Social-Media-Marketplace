@@ -8,9 +8,11 @@ djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
 mysqlclient==2.2.7
 pillow==11.1.0
+pyasn1==0.6.1
 pycparser==2.22
 PyJWT==2.9.0
 pyotp==2.9.0
 python-decouple==3.8
 qrcode==8.1
+rsa==4.9
 sqlparse==0.5.3
