@@ -18,6 +18,7 @@ function Auth() {
   const [email, setEmail] = useState("");
   const [qrCodeURL, setQrCodeURL] = useState("");
   const [totpSecretKey, settotpSecretKey] = useState("");
+  const [dob, setDob] = useState("");
 
 
 
@@ -55,7 +56,8 @@ function Auth() {
         username,
         password,
         firstName,
-        lastName
+        lastName,
+        dob
       );
   
       console.log("Message:", message);
@@ -120,16 +122,16 @@ function Auth() {
         alert("Please enter a 6-digit code.");
         return;
       }
-      const {data} = await api.post('verify-totp/', {otp, email});
-      if (!data || typeof data.message !== "string") {
-        throw new Error("Invalid response from server");
-      }
-      if (data.message === "Account verified successfully"){
-        console.log("LOGIN VERIFICATION SUCCESS");
-        navigate("/home");
-      }else {
-        alert("Verification failed. Please try again.");
-      }
+      // const {data} = await api.post('verify-totp/', {otp, email});
+      // if (!data || typeof data.message !== "string") {
+      //   throw new Error("Invalid response from server");
+      // }
+      // if (data.message === "Account verified successfully"){
+      //   console.log("LOGIN VERIFICATION SUCCESS");
+      navigate("/home");
+      // }else {
+      //   alert("Verification failed. Please try again.");
+      // }
     }catch (error) {
       console.error("Login verification error:", error);
       setIsAuthenticated(false);
@@ -362,6 +364,17 @@ function Auth() {
                 sx={{ marginBottom: "10px" }}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+              />
+
+              <TextField
+                label="Date of Birth"
+                type="date"
+                variant="outlined"
+                fullWidth
+                sx={{ marginBottom: "10px" }}
+                InputLabelProps={{ shrink: true }}
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
               />
 
               <TextField

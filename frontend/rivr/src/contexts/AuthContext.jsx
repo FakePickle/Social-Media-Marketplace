@@ -65,9 +65,9 @@ try {
 }
 };
 
-const register = async (email, username, password, first_name, last_name) => {
+const register = async (email, username, password, first_name, last_name, dob) => {
   try{
-    const { data } = await api.post('register/', {email, username, password, first_name, last_name});
+    const { data } = await api.post('register/', {email, username, password, first_name, last_name, dob});
     const message = data.message
     const instructions = data.instructions
     const qrCodeURL = data.qr_code
