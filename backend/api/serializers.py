@@ -352,6 +352,10 @@ class GroupSerializer(serializers.ModelSerializer):
 
 
 class GroupMessageSerializer(serializers.ModelSerializer):
+    sender = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
+
     class Meta:
         model = GroupMessage
         fields = ["sender", "group", "content", "timestamp"]
@@ -362,9 +366,11 @@ class GroupMessageSerializer(serializers.ModelSerializer):
         group = validated_data["group"]
         message = validated_data["content"]
 
+        print(sender, group, message)
+
         # Ensure sender and group are valid
         try:
-            sender_user = CustomUser.objects.get(username=sender)
+            sender_user = CustomUser.objects.get(email=sender)
             group_instance = Group.objects.get(name=group)
         except (CustomUser.DoesNotExist, Group.DoesNotExist):
             raise serializers.ValidationError("Sender or group does not exist.")
@@ -373,12 +379,12 @@ class GroupMessageSerializer(serializers.ModelSerializer):
         validated_data["sender"] = sender_user
         validated_data["group"] = group_instance
 
-        message = GroupMessage().encrypt_message(message, group_instance)
+        message = GroupMessage().encrypt_message(message, sender_user, group_instance)
         print(f"Encrypted group message: {message}")
-        print(
-            "Decrypted group message:",
-            GroupMessage.decrypt_message(message, group_instance),
-        )
+        # print(
+        #     "Decrypted group message:",
+        #     GroupMessage.decrypt_message(message, group_instance),
+        # )
 
         # Save the group message to the database
         validated_data["content"] = message

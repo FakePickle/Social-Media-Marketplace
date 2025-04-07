@@ -267,23 +267,39 @@ class MessageView(APIView):
         sender_username = request.data.get("sender")
         receiver_username = request.data.get("receiver")
 
-        if group is not None:
-            group_obj = get_object_or_404(Group, pk=group)
-            message = get_object_or_404(Message, pk=pk, group=group_obj)
+        if pk is not None:
+            group_obj = get_object_or_404(Group, pk=pk)
 
+            # Check sender permission
             if not group_obj.members.filter(username=sender_username).exists():
                 return Response(
                     {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
                 )
 
-            try:
-                decrypted = GroupMessage.decrypt_message(message.content, group_obj)
-            except Exception as e:
-                decrypted = f"Unable to decrypt message: {e}"
+            # Get all messages for the group
+            messages = GroupMessage.objects.filter(group=group_obj).order_by("timestamp")
+            if not messages.exists():
+                return Response(
+                    {"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND
+                )
 
-            data = GroupMessageSerializer(message).data
-            data["decrypted_content"] = decrypted
-            return Response(data)
+            serialized_messages = []
+            for msg in messages:
+                try:
+                    content = ast.literal_eval(msg.content)
+                    # Decrypt the message content
+                    decrypted = GroupMessage.decrypt_message(
+                        content["ciphertext"], content["signature"], msg.sender, group_obj
+                    )
+                except Exception as e:
+                    decrypted = f"Unable to decrypt message: {e}"
+
+                message_data = GroupMessageSerializer(msg).data
+                message_data["decrypted_content"] = decrypted
+                serialized_messages.append(message_data)
+
+            return Response(serialized_messages)
+
 
         # If sender and receiver are provided (DM chat history)
         if sender_username and receiver_username:
@@ -320,34 +336,6 @@ class MessageView(APIView):
                 response_data.append(data)
 
             return Response(response_data)
-
-        # ✅ If `pk` is given (get single DM message)
-        if pk is not None:
-            message = get_object_or_404(Message, pk=pk)
-            if (
-                sender_username != message.sender.username
-                and sender_username != message.receiver.username
-            ):
-                return Response(
-                    {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
-                )
-
-            import ast
-
-            try:
-                content_dict = ast.literal_eval(message.content)
-                decrypted = Message.decrypt_message(
-                    content_dict["ciphertext"],
-                    content_dict["signature"],
-                    message.sender,
-                    message.receiver,
-                )
-            except Exception as e:
-                decrypted = f"Unable to decrypt message: {e}"
-
-            data = MessageSerializer(message).data
-            data["decrypted_content"] = decrypted
-            return Response(data)
 
         return Response({"detail": "Bad request"}, status=status.HTTP_400_BAD_REQUEST)
 

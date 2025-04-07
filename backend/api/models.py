@@ -271,6 +271,7 @@ class Message(models.Model):
 
 
 class Group(models.Model):
+    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     private_key = models.TextField(null=True, blank=True)  # For group encryption
