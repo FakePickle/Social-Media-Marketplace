@@ -1,5 +1,5 @@
 import { Card, TextField, Button, Typography } from "@mui/material";
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect} from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
@@ -26,7 +26,29 @@ function Auth() {
     setIsSwapped(!isSwapped);
   };
 
+  useEffect(() => {
+    return () => {
+      // Cleanup sensitive state on unmount
+      setEmail("")
+      setPassword("")
+      setFirstName("")
+      setUsername("")
+      setLastName("")
+      setVerificationCode(["", "", "", "", "", ""])
+      setQrCodeURL("")
+      settotpSecretKey("")
+    };
+  }, []);
+
   const handleUserRegistering = async () => {
+    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim()) {
+      alert("All fields are required.");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
     try {
       const [message, instructions, qrCodeURL, totp_uri] = await register(
         email,
@@ -50,7 +72,7 @@ function Auth() {
   };
 
   const handleIsConfirming = () => {
-    setIsRegistering(false);
+    // setIsRegistering(false);
     setIsConfirming(true);
   };
 
@@ -61,7 +83,8 @@ function Auth() {
     }
     try {
       await login(username, password);
-      navigate('/home');
+      setIsConfirming(true)
+      
     } catch (err) {
       alert(err.error || "Login failed");
     }
@@ -74,6 +97,8 @@ function Auth() {
       setVerificationCode(newCode);
     }
   };
+
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleVirtualKeyPress = (value) => {
     const emptyIndex = verificationCode.findIndex((digit) => digit === "");
@@ -88,15 +113,44 @@ function Auth() {
       handleVerificationInput(filledIndex, "");
     }
   };
-
-  
-  const handleConfirmSignUp = async () => {
-    setIsConfirming(false);
+  const handleLoginConfirmSignUp = async () => {
     try{
       const otp = verificationCode.join("")
+      if (otp.length !== 6) {
+        alert("Please enter a 6-digit code.");
+        return;
+      }
+      const email = username
       const {data} = await api.post('verify-totp/', {otp, email});
+      if (!data || typeof data.message !== "string") {
+        throw new Error("Invalid response from server");
+      }
       if (data.message === "Account verified successfully"){
-        console.log("VERIFICATION SUCCESS");
+        console.log("LOGIN VERIFICATION SUCCESS");
+        navigate("/home");
+      }else {
+        alert("Verification failed. Please try again.");
+      }
+    }catch (error) {
+      console.error("Login verification error:", error);
+      setIsAuthenticated(false);
+      alert("Verification failed. Please try again.");
+    }
+  };
+  
+  const handleRegisterConfirmSignUp = async () => {
+    try{
+      const otp = verificationCode.join("")
+      if (otp.length !== 6) {
+        alert("Please enter a 6-digit code.");
+        return;
+      }
+      const {data} = await api.post('verify-totp/', {otp, email});
+      if (!data || typeof data.message !== "string") {
+        throw new Error("Invalid response from server");
+      }
+      if (data.message === "Account verified successfully"){
+        console.log(" REGISTER VERIFICATION SUCCESS");
         setIsSwapped(false);
         setEmail("")
         setPassword("")
@@ -109,11 +163,13 @@ function Auth() {
         setQrCodeURL("")
         settotpSecretKey("")
         console.log("RESET COMPLETE")
+      }else {
+        alert("Verification failed. Please try again.");
       }
-    }catch (error){
+    }catch (error) {
+      console.error("Registration verification error:", error);
       setIsAuthenticated(false);
-    console.log("VERIFICATION : Set is authenticated to false")
-    throw error.response?.data || { error: 'Verification failed' };
+      alert("Verification failed. Please try again.");
     }
   };
 
@@ -162,7 +218,7 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button variant="contained" onClick={handleConfirmSignUp} sx={styles.verifyButton}>
+          <Button variant="contained" onClick={ isRegistering? handleRegisterConfirmSignUp: handleLoginConfirmSignUp} sx={styles.verifyButton}>
             Verify
           </Button>
         </Card>
@@ -170,7 +226,7 @@ function Auth() {
     );
   }
 
-  if (isRegistering) {
+  if (isRegistering && !isConfirming) {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
@@ -281,7 +337,7 @@ function Auth() {
               <Typography variant="h4" sx={styles.title}>
                 Register
               </Typography>
-              
+
               <TextField
                 label="Username"
                 variant="outlined"
