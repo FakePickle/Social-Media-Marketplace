@@ -41,10 +41,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30)
-    date_of_birth = models.DateField(null=True, blank=True)
-    bio = models.TextField(max_length=500, blank=True)
-    location = models.CharField(max_length=100, blank=True)
-    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    dob = models.DateField(null=True, blank=True)
+    bio = models.TextField(max_length=500, null=True, blank=True)
+    address = models.CharField(max_length=100, null=True, blank=True)
+    profile_picture = models.ImageField(
+        upload_to="profile_pictures/", null=True, blank=True
+    )
     is_verified = models.BooleanField(default=False)
     totp_secret = models.CharField(max_length=32, null=True, blank=True)
     private_key = models.TextField(null=True, blank=True)
@@ -56,8 +58,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     objects = CustomUserManager()
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username", "first_name", "last_name"]
 
     def __str__(self):
         return self.email
@@ -77,9 +79,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         if not self.totp_secret:
             self.generate_totp_secret()
         return pyotp.totp.TOTP(self.totp_secret).provisioning_uri(
-            self.email,
-            issuer_name="Rivr"
+            self.email, issuer_name="Rivr"
         )
+
+    def get_secret(self):
+        return self.totp_secret
 
     def verify_totp(self, code):
         if not self.totp_secret:
@@ -89,22 +93,19 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def generate_keys(self):
         if not self.private_key or not self.public_key:
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048
-            )
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             public_key = private_key.public_key()
 
             self.private_key = private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            ).decode('utf-8')
+                encryption_algorithm=serialization.NoEncryption(),
+            ).decode("utf-8")
 
             self.public_key = public_key.public_bytes(
                 encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
-            ).decode('utf-8')
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            ).decode("utf-8")
             self.save()
 
 
@@ -312,7 +313,7 @@ class GroupMessage(models.Model):
 
     @staticmethod
     def encrypt_message(plain_text, sender, receiver):
-        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding
         from decouple import config
 
@@ -349,9 +350,9 @@ class GroupMessage(models.Model):
 
     @staticmethod
     def decrypt_message(ciphertext_hex, signature_hex, sender, receiver):
-        from cryptography.hazmat.primitives import serialization, hashes
-        from cryptography.hazmat.primitives.asymmetric import padding
         from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
         from decouple import config
 
         ciphertext = bytes.fromhex(ciphertext_hex)

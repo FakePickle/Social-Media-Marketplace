@@ -2,10 +2,10 @@ import random
 from datetime import datetime
 
 import pyotp
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
-from django.db.models import Q
 
 from .models import (
     Chat,
@@ -554,8 +554,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "profile_picture",
             "profile_picture_url",
             "bio",
-            "location",
-            "date_of_birth",
+            "address",
+            "dob",
         ]
         read_only_fields = [
             "id",
@@ -581,29 +581,23 @@ class UserListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = [
-            'id',
-            'username',
-            'profile_picture_url',
-            'bio',
-            'is_friend'
-        ]
+        fields = ["id", "username", "profile_picture_url", "bio", "is_friend"]
 
     def get_profile_picture_url(self, obj):
         if obj.profile_picture:
-            request = self.context.get('request')
+            request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
 
     def get_is_friend(self, obj):
-        request = self.context.get('request')
+        request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
-        
+
         # Check if there's an accepted friendship between the users
         return Friendship.objects.filter(
             (Q(user=request.user, friend=obj) | Q(user=obj, friend=request.user)),
-            is_accepted=True
+            is_accepted=True,
         ).exists()

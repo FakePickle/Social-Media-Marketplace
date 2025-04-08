@@ -6,7 +6,7 @@ import ForgotPassw from "../components/ForgotPassw";
 import api from "../utils/api";
 
 function Auth() {
-  const { login, register, verifyData, verifyEmail, verifyTotp } = useContext(AuthContext);
+  const { login, register, verifyEmail, verify2FA } = useContext(AuthContext);
   const [isSwapped, setIsSwapped] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -22,30 +22,58 @@ function Auth() {
   const [dob, setDob] = useState("");
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
-    const navigate = useNavigate();
-    const handleSwap = () => {
-        setIsSwapped(!isSwapped);
-    };
+  const navigate = useNavigate();
+
+  const handleSwap = () => {
+    setIsSwapped(!isSwapped);
+  };
 
   useEffect(() => {
     return () => {
       // Cleanup sensitive state on unmount
-      setEmail("")
-      setPassword("")
-      setFirstName("")
-      setUsername("")
-      setLastName("")
-      setVerificationCode(["", "", "", "", "", ""])
-      setQrCodeURL("")
-      settotpSecretKey("")
+      setEmail("");
+      setPassword("");
+      setFirstName("");
+      setUsername("");
+      setLastName("");
+      setVerificationCode(["", "", "", "", "", ""]);
+      setQrCodeURL("");
+      settotpSecretKey("");
     };
   }, []);
 
   const handleEmailVerification = async () => {
     try {
       const otp = verificationCode.join("");
-      await verifyEmail(otp, email);
-      const [message, instructions, qrCodeURL, totp_uri] = await register(
+      // Verify the email with OTP
+      const data = await verifyEmail(otp, email);
+      
+      if (data && data.qr_code && data.totp_uri) {
+        // Set the QR code and TOTP data from the response
+        setQrCodeURL(data.qr_code);
+        settotpSecretKey(data.totp_uri);
+        // Clear verification code for 2FA
+        setVerificationCode(["", "", "", "", "", ""]);
+        // Move to 2FA setup
+        setIsConfirmingEmail(false);
+        setIsRegistering(true);
+      } else {
+        throw new Error("Invalid verification response");
+      }
+    } catch (error) {
+      console.error("Email verification error:", error);
+      alert(error.response?.data?.error || error.message || "Verification failed");
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
+      alert("All fields are required.");
+      return;
+    }
+    try {
+      // Register user - this will send verification email
+      await register(
         email,
         username,
         password,
@@ -53,59 +81,15 @@ function Auth() {
         lastName,
         dob
       );
-      setQrCodeURL(qrCodeURL);
-      settotpSecretKey(totp_uri);
-      setIsConfirmingEmail(false);
-      setIsRegistering(true);
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  const handleDataVerification = async () => {
-    try {
-      await verifyData(username, password, email, firstName, lastName, dob);
+      // Clear verification code for email verification
+      setVerificationCode(["", "", "", "", "", ""]);
+      // Move to email verification page
       setIsConfirmingEmail(true);
     } catch (error) {
-      alert(error.message);
+      console.error("Registration error:", error);
+      alert(error.response?.data?.error || error.error || "Registration failed");
     }
   };
-
-  // const handleUserRegistering = async () => {
-  //   if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-  //     alert("All fields are required.");
-  //     return;
-  //   }
-  //   if (!isValidEmail(email)) {
-  //     alert("Please enter a valid email address.");
-  //     return;
-  //   }
-  //   try {
-  //     const [message, instructions, qrCodeURL, totp_uri] = await register(
-  //       email,
-  //       username,
-  //       password,
-  //       firstName,
-  //       lastName,
-  //       dob
-  //     );
-  
-  //     console.log("Message:", message);
-  //     console.log("Instructions:", instructions);
-  //     console.log("QR Code:", qrCodeURL);
-  //     console.log("TOTP URI:", totp_uri);
-  
-  //     setQrCodeURL(qrCodeURL);
-  //     settotpSecretKey(totp_uri);
-  //     setIsRegistering(true);
-  //   } catch (error) {
-  //     alert(error?.error || "Registration failed");
-  //   }
-  // };
-
-    const handleIsConfirming = () => {
-        setIsConfirming(true);
-    };
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -113,9 +97,8 @@ function Auth() {
       return;
     }
     try {
-      await login(email, password);
-      setIsConfirming(true)
-      
+      const data = await login(email, password);
+      setIsConfirming(true);
     } catch (err) {
       alert(err.error || "Login failed");
     }
@@ -129,14 +112,12 @@ function Auth() {
     }
   };
 
-  // const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    const handleVirtualKeyPress = (value) => {
-        const emptyIndex = verificationCode.findIndex((digit) => digit === "");
-        if (emptyIndex !== -1) {
-            handleVerificationInput(emptyIndex, value);
-        }
-    };
+  const handleVirtualKeyPress = (value) => {
+    const emptyIndex = verificationCode.findIndex((digit) => digit === "");
+    if (emptyIndex !== -1) {
+      handleVerificationInput(emptyIndex, value);
+    }
+  };
 
   const handleDeletePress = () => {
     const filledIndex = verificationCode.findLastIndex((digit) => digit !== "");
@@ -144,20 +125,21 @@ function Auth() {
       handleVerificationInput(filledIndex, "");
     }
   };
+
   const handleLoginConfirmSignUp = async () => {
     try {
       const otp = verificationCode.join("");
-      await verifyTotp(otp, email);
+      await verify2FA(otp, email);
       navigate("/home");
     } catch (error) {
       alert(error.message);
     }
   };
-  
+
   const handleRegisterConfirmSignUp = async () => {
     try {
       const otp = verificationCode.join("");
-      await verifyTotp(otp, email);
+      await verify2FA(otp, email);
       // Reset state after successful registration
       setIsSwapped(false);
       setEmail("");
@@ -171,11 +153,11 @@ function Auth() {
       setVerificationCode(["", "", "", "", "", ""]);
       setQrCodeURL("");
       settotpSecretKey("");
+      navigate("/home");
     } catch (error) {
       alert(error.message);
     }
   };
-
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
@@ -186,7 +168,6 @@ function Auth() {
   if (isForgotPassword) {
     return (
       <ForgotPassw></ForgotPassw>)}
-
 
   if (isConfirmingEmail){
     return (
@@ -279,7 +260,11 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button variant="contained" onClick={ isRegistering? handleRegisterConfirmSignUp: handleLoginConfirmSignUp} sx={styles.verifyButton}>
+          <Button 
+            variant="contained" 
+            onClick={isRegistering ? handleRegisterConfirmSignUp : handleLoginConfirmSignUp} 
+            sx={styles.verifyButton}
+          >
             Verify
           </Button>
         </Card>
@@ -287,12 +272,12 @@ function Auth() {
     );
   }
 
-  if (isRegistering && !isConfirming) {
+  if (isRegistering) {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
+          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+        </div>
         <Card sx={styles.registerCard}>
           <Typography variant="h5" sx={styles.title}>
             Scan QR Code to Sign Up with Google
@@ -328,7 +313,17 @@ function Auth() {
               </Typography>
             </>
           )}
-          <Button variant="contained" onClick={handleIsConfirming} sx={styles.actionButton}>
+          <Button 
+            variant="contained" 
+            onClick={() => {
+              // Keep isRegistering true, and also set isConfirming to true
+              // This way we go to the verification screen but retain the registration flow
+              setIsConfirming(true);
+              // Make sure verification code is cleared
+              setVerificationCode(["", "", "", "", "", ""]);
+            }} 
+            sx={styles.actionButton}
+          >
             Next
           </Button>
         </Card>
@@ -460,7 +455,7 @@ function Auth() {
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
 
-                                <Button variant="contained" onClick={handleDataVerification} sx={styles.actionButton}>
+                                <Button variant="contained" onClick={handleRegister} sx={styles.actionButton}>
                                     Register
                                 </Button>
                             </>
@@ -564,6 +559,25 @@ const styles = {
         width: "80%",
         color: "white",
         borderColor: "white",
+        "&:hover": { backgroundColor: "#1b263b" },
+    },
+    verificationContainer: {
+        display: "flex",
+        gap: "10px",
+        marginBottom: "20px",
+    },
+    verificationInput: {
+        width: "40px",
+    },
+    virtualKeyboard: {
+        display: "flex",
+        gap: "10px",
+    },
+    virtualKey: {
+        width: "40px",
+        height: "40px",
+        backgroundColor: "#415a77",
+        color: "white",
         "&:hover": { backgroundColor: "#1b263b" },
     },
 };
