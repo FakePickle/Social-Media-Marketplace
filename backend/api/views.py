@@ -44,6 +44,7 @@ from .serializers import (
     MessageSerializer,
     RegisterSerializer,
     TOTPVerificationSerializer,
+    UserProfileSerializer,
 )
 
 
@@ -133,7 +134,7 @@ class LoginView(APIView):
 
             user = authenticate(request, username=email, password=password)
 
-            if user and user.is_verified:
+            if user and user.is_verified and user.is_active:
                 refresh = RefreshToken.for_user(user)
                 return Response(
                     {
@@ -234,53 +235,6 @@ class VerifyEmailView(APIView):
                 {"error": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-
-# class OTPVerifyView(APIView):
-#     permission_classes = [AllowAny]
-#
-#     def post(self, request):
-#         serializer = OTPVerificationSerializer(data=request.data)
-#         if serializer.is_valid():
-#             otp = serializer.validated_data["otp"]
-#             email = serializer.validated_data["email"]
-#
-#             try:
-#                 user = CustomUser.objects.get(email=email)
-#                 otp_record = OTPVerification.objects.filter(
-#                     user=user, is_verified=False
-#                 ).first()
-#
-#                 if not otp_record:
-#                     return Response(
-#                         {"error": "No pending verification for this user"},
-#                         status=status.HTTP_400_BAD_REQUEST,
-#                     )
-#
-#                 if otp_record.verify_otp(otp):
-#                     otp_record.is_verified = True
-#                     user.is_verified = True
-#                     user.save()
-#                     otp_record.save()
-#                     return Response(
-#                         {
-#                             "message": "Account verified successfully",
-#                             "instructions": "You can now log in with your email and password",
-#                             "login_endpoint": "/api/login/",
-#                         },
-#                         status=status.HTTP_200_OK,
-#                     )
-#                 return Response(
-#                     {
-#                         "error": "Invalid OTP. Please try again with a new code from your authenticator app."
-#                     },
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-#             except CustomUser.DoesNotExist:
-#                 return Response(
-#                     {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-#                 )
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FriendshipView(APIView):
@@ -892,4 +846,98 @@ class ResetPasswordView(APIView):
             return Response(
                 {"error": f"Failed to reset password: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+class ListUserView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # Get all active users
+            active_users = CustomUser.objects.filter(is_active=True)
+
+            # Serialize the users using UserProfileSerializer
+            serializer = UserProfileSerializer(active_users, many=True)
+
+            return Response({
+                "users": serializer.data,
+                "count": active_users.count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch users: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UserProfileView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id=None):
+        try:
+            if user_id:
+                # Get specific user profile
+                user = CustomUser.objects.get(id=user_id, is_active=True)
+                serializer = UserProfileSerializer(user, context={'request': request})
+            else:
+                # Get current user's profile if authenticated
+                if not request.user.is_authenticated:
+                    return Response(
+                        {"error": "Authentication required"},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+                serializer = UserProfileSerializer(request.user, context={'request': request})
+            
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch user profile: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, user_id=None):
+        try:
+            if user_id:
+                # Update specific user profile (admin only)
+                if not request.user.is_staff:
+                    return Response(
+                        {"error": "Permission denied"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                user = CustomUser.objects.get(id=user_id, is_active=True)
+            else:
+                # Update current user's profile
+                if not request.user.is_authenticated:
+                    return Response(
+                        {"error": "Authentication required"},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+                user = request.user
+
+            # Handle profile picture upload
+            if 'profile_picture' in request.FILES:
+                user.profile_picture = request.FILES['profile_picture']
+
+            # Update other fields
+            serializer = UserProfileSerializer(user, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to update user profile: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

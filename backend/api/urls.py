@@ -18,6 +18,8 @@ from .views import (
     RequestPasswordResetView,
     VerifyPasswordResetView,
     ResetPasswordView,
+    UserProfileView,
+    ListUserView
 )
 
 urlpatterns = [
@@ -39,7 +41,10 @@ urlpatterns = [
         name="verify-password-reset",
     ),
     path("reset-password/", ResetPasswordView.as_view(), name="reset-password"),
-    # path("users/", UserView.as_view(), name="user-list"),
+    # User endpoints
+    path("users/", ListUserView.as_view(), name="list-users"),
+    path("user/profile/", UserProfileView.as_view(), name="current-user-profile"),
+    path("user/profile/<int:user_id>/", UserProfileView.as_view(), name="user-profile"),
     path("messages/", MessageView.as_view(), name="messages"),
     path("messages/<int:pk>/", MessageView.as_view(), name="message-detail"),
     path("groups/", GroupCreateView.as_view(), name="create-group"),

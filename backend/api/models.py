@@ -40,19 +40,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30)
-    last_name = models.CharField(max_length=150)
-    dob = models.DateField(null=True, blank=True)
-    address = models.CharField(max_length=255, null=True, blank=True)
-    profile_picture = models.ImageField(
-        upload_to="profile_pics/", null=True, blank=True
-    )
+    last_name = models.CharField(max_length=30)
+    date_of_birth = models.DateField(null=True, blank=True)
+    bio = models.TextField(max_length=500, blank=True)
+    location = models.CharField(max_length=100, blank=True)
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    totp_secret = models.CharField(max_length=32, null=True, blank=True)
     private_key = models.TextField(null=True, blank=True)
     public_key = models.TextField(null=True, blank=True)
-    bio = models.TextField(null=True, blank=True)
-    totp_secret = models.CharField(max_length=32, blank=True)
-    # Mail verification
-    is_verified = models.BooleanField(default=False)
-    # Admin approval
     is_approved = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -60,36 +56,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     objects = CustomUserManager()
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username", "first_name", "last_name"]
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
 
     def __str__(self):
         return self.email
 
     def get_full_name(self):
-        return f"{self.first_name} {self.last_name}".strip()
+        return f"{self.first_name} {self.last_name}"
 
     def get_short_name(self):
         return self.first_name
-
-    def generate_keys(self):
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        public_key = private_key.public_key()
-
-        self.private_key = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.BestAvailableEncryption(
-                config("RSA_PASSPHRASE").encode()
-            ),
-        ).decode()
-
-        self.public_key = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode()
-
-        self.save()
 
     def generate_totp_secret(self):
         if not self.totp_secret:
@@ -97,17 +74,38 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             self.save()
 
     def get_totp_uri(self):
+        if not self.totp_secret:
+            self.generate_totp_secret()
         return pyotp.totp.TOTP(self.totp_secret).provisioning_uri(
-            name=self.username,
-            issuer_name="Rivr",
+            self.email,
+            issuer_name="Rivr"
         )
 
-    def get_secret(self):
-        return self.totp_secret
-
-    def verify_otp(self, otp):
+    def verify_totp(self, code):
+        if not self.totp_secret:
+            return False
         totp = pyotp.TOTP(self.totp_secret)
-        return totp.verify(otp)
+        return totp.verify(code)
+
+    def generate_keys(self):
+        if not self.private_key or not self.public_key:
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048
+            )
+            public_key = private_key.public_key()
+
+            self.private_key = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ).decode('utf-8')
+
+            self.public_key = public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode('utf-8')
+            self.save()
 
 
 class Friendship(models.Model):

@@ -535,3 +535,42 @@ class TOTPVerificationSerializer(serializers.Serializer):
         # Store user in the validated data for the view
         data["user"] = user
         return data
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    profile_picture_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            'id',
+            'email',
+            'username',
+            'first_name',
+            'last_name',
+            'date_joined',
+            'last_login',
+            'is_active',
+            'is_verified',
+            'profile_picture',
+            'profile_picture_url',
+            'bio',
+            'location',
+            'date_of_birth',
+        ]
+        read_only_fields = [
+            'id',
+            'email',
+            'date_joined',
+            'last_login',
+            'is_active',
+            'is_verified'
+        ]
+
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
