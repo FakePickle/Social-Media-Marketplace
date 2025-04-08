@@ -5,6 +5,7 @@ import pyotp
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
+from django.db.models import Q
 
 from .models import (
     Chat,
@@ -95,20 +96,6 @@ class LoginSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ["email", "password"]
-
-
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = [
-            "username",
-            "first_name",
-            "last_name",
-            "bio",
-            "profile_picture",
-            "is_active",
-            "is_verified",
-        ]
 
 
 class OTPSerializer(serializers.Serializer):
@@ -543,28 +530,51 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = [
-            'id',
-            'email',
-            'username',
-            'first_name',
-            'last_name',
-            'date_joined',
-            'last_login',
-            'is_active',
-            'is_verified',
-            'profile_picture',
-            'profile_picture_url',
-            'bio',
-            'location',
-            'date_of_birth',
+            "id",
+            "email",
+            "username",
+            "first_name",
+            "last_name",
+            "date_joined",
+            "last_login",
+            "is_active",
+            "is_verified",
+            "profile_picture",
+            "profile_picture_url",
+            "bio",
+            "location",
+            "date_of_birth",
         ]
         read_only_fields = [
+            "id",
+            "email",
+            "date_joined",
+            "last_login",
+            "is_active",
+            "is_verified",
+        ]
+
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    profile_picture_url = serializers.SerializerMethodField()
+    is_friend = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = [
             'id',
-            'email',
-            'date_joined',
-            'last_login',
-            'is_active',
-            'is_verified'
+            'username',
+            'profile_picture_url',
+            'bio',
+            'is_friend'
         ]
 
     def get_profile_picture_url(self, obj):
@@ -574,3 +584,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+
+    def get_is_friend(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        # Check if there's an accepted friendship between the users
+        return Friendship.objects.filter(
+            (Q(user=request.user, friend=obj) | Q(user=obj, friend=request.user)),
+            is_accepted=True
+        ).exists()

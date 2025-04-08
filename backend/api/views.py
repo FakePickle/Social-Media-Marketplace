@@ -45,6 +45,7 @@ from .serializers import (
     RegisterSerializer,
     TOTPVerificationSerializer,
     UserProfileSerializer,
+    UserListSerializer,
 )
 
 
@@ -856,8 +857,8 @@ class ListUserView(APIView):
             # Get all active users
             active_users = CustomUser.objects.filter(is_active=True)
 
-            # Serialize the users using UserProfileSerializer
-            serializer = UserProfileSerializer(active_users, many=True)
+            # Serialize the users using UserListSerializer
+            serializer = UserListSerializer(active_users, many=True, context={'request': request})
 
             return Response({
                 "users": serializer.data,
@@ -887,9 +888,9 @@ class UserProfileView(APIView):
                         status=status.HTTP_401_UNAUTHORIZED
                     )
                 serializer = UserProfileSerializer(request.user, context={'request': request})
-            
+
             return Response(serializer.data, status=status.HTTP_200_OK)
-            
+
         except CustomUser.DoesNotExist:
             return Response(
                 {"error": "User not found"},
