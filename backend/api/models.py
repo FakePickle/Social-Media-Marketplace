@@ -396,3 +396,22 @@ class GroupMessage(models.Model):
             return plain_text.decode()
         except InvalidSignature:
             raise ValueError("Signature verification failed!")
+
+
+class MarketPlace(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="created_marketplaces"
+    )
+    image = models.ImageField(upload_to="marketplace_images/", null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    is_sold = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def create(self, **kwargs):
+        super().create(**kwargs)
+
+    def __str__(self):
+        return self.name

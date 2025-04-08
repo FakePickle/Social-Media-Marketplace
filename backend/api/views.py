@@ -20,7 +20,6 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api import serializers
-from backend.backend import settings
 
 from .models import Chat, CustomUser, Friendship, Group, GroupMessage, Message
 from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
@@ -40,7 +39,7 @@ class RegisterView(APIView):
             send_mail(
                 subject="Welcome to Rivr - Verify your account",
                 message=f"Please verify your account using the following code: {code}",
-                from_email=settings.EMAIL_HOST_USER,
+                from_email=config["EMAIL_HOST_USER"],
                 recipient_list=[email],
                 fail_silently=False,
             )

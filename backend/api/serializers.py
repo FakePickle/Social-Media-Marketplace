@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
-from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, Message)
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -446,3 +446,44 @@ class GroupMessageSerializer(serializers.ModelSerializer):
 
         group_message = GroupMessage.objects.create(**validated_data)
         return group_message
+
+
+class MarketPlaceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketPlace
+        fields = ["id", "name", "description", "price", "created_by", "created_at"]
+
+    def create(self, validated_data):
+        """Create a new marketplace item"""
+        created_by = validated_data.pop("created_by", None)
+        if not created_by:
+            raise serializers.ValidationError({"created_by": "This field is required."})
+        try:
+            created_by_user = CustomUser.objects.get(email=created_by)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError({"created_by": "User does not exist."})
+
+        validated_data["created_by"] = created_by_user
+
+        item = MarketPlace.objects.create(**validated_data)
+        return item
+
+    def update(self, instance, validated_data):
+        """Update an existing marketplace item"""
+        instance.name = validated_data.get("name", instance.name)
+        instance.description = validated_data.get("description", instance.description)
+        instance.price = validated_data.get("price", instance.price)
+        instance.save()
+        return instance
+    
+    def delete(self, instance):
+        """Delete a marketplace item"""
+        instance.delete()
+        return {"message": "Marketplace item deleted successfully."}
+    
+    def validate(self, data):
+        """Ensure item name is unique"""
+        item_name = data.get("name")
+        if MarketPlace.objects.filter(name=item_name).exists():
+            raise serializers.ValidationError("Marketplace item with this name already exists.")
+        return data
