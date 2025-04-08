@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Typography, TextField, InputAdornment, List, ListItem, ListItemText, Divider, Button, Autocomplete } from '@mui/material';
-import { FaSearch, FaPaperPlane } from 'react-icons/fa';
+import { FaSearch, FaPaperPlane, FaPaperclip, FaTimes } from 'react-icons/fa';
 
 const initialPeople = [
   { name: "Alice Johnson", messages: [{ text: "Hey, how are you?", sender: "Alice" }] },
@@ -30,89 +30,151 @@ function Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
 
-  // Filter people based on search input
   const filteredPeople = people.filter(person =>
     person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const sendMessage = () => {
-    if (newMessage.trim() === "" || selectedChat === null) return;
-
+    if ((newMessage.trim() === "" && !selectedFile) || selectedChat === null) return;
+  
+    const newMsg = selectedFile
+      ? { file: selectedFile.name, sender: "You", type: selectedFile.type }
+      : { text: newMessage, sender: "You" };
+  
     const updatedPeople = people.map(person =>
       person.name === selectedChat.name
-        ? { ...person, messages: [...person.messages, { text: newMessage, sender: "You" }] }
+        ? { ...person, messages: [...person.messages, newMsg] }
         : person
     );
-
+  
     setPeople(updatedPeople);
     setSelectedChat(updatedPeople.find(person => person.name === selectedChat.name));
     setNewMessage("");
+    setSelectedFile(null);
+  };
+
+  const handleFileRemove = () => {
+    setSelectedFile(null);
+    document.getElementById('fileInput').value = null;
+  };
+
+  const renderFilePreview = () => {
+    if (!selectedFile) return null;
+
+    const fileType = selectedFile.type;
+    const fileName = selectedFile.name;
+
+    if (fileType.startsWith('image/')) {
+      return (
+        <div style={{ 
+          margin: '10px 0', 
+          padding: '10px', 
+          backgroundColor: '#33415C', 
+          borderRadius: '5px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <img 
+            src={URL.createObjectURL(selectedFile)} 
+            alt="preview" 
+            style={{ maxWidth: '100px', maxHeight: '100px', objectFit: 'contain' }} 
+          />
+          <span style={{ color: 'white' }}>{fileName}</span>
+          <Button 
+            onClick={handleFileRemove}
+            sx={{ color: '#778DA9', minWidth: 'auto' }}
+          >
+            <FaTimes />
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ 
+        margin: '10px 0', 
+        padding: '10px', 
+        backgroundColor: '#33415C', 
+        borderRadius: '5px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }}>
+        <span style={{ color: 'white' }}>📎 {fileName}</span>
+        <Button 
+          onClick={handleFileRemove}
+          sx={{ color: '#778DA9', minWidth: 'auto' }}
+        >
+          <FaTimes />
+        </Button>
+      </div>
+    );
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "90vh", overflow: "hidden" }}>
       {/* Left Sidebar - People List */}
-      <div style={{ width: "35vh", backgroundColor: "#1B263B", padding: "15px", display: "flex", flexDirection: "column" }}>
-        <Typography variant="h4" gutterBottom color="white">
-          Chats 
-        </Typography>
-
-        {/* AutoComplete Search Bar */}
-        <Autocomplete
-          freeSolo
-          options={people.map((person) => person.name)}
-          onInputChange={(event, newInputValue) => setSearchQuery(newInputValue)}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              variant="outlined"
-              placeholder="Search Chats"
-              fullWidth
-              InputProps={{
-                ...params.InputProps,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <FaSearch color="#778DA9" size={"20px"} />
-                  </InputAdornment>
-                ),
-                sx: { borderRadius: "30px", color: "white" }
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': { borderRadius: "30px" },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: "#778DA9" },
-              }}
-            />
-          )}
+      <div style={{ width: "35vh", backgroundColor: "#1B263B", padding: "15px", display: "flex", flexDirection: "column", marginTop:'10px' }}>
+        <TextField
+          placeholder="Search"
+          variant="outlined"
+          size="small"
+          
+          fullWidth
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <FaSearch style={{ color: "#778DA9" }} />
+              </InputAdornment>
+            ),
+            sx: { backgroundColor: "#fff", borderRadius: "30px" },
+          }}
+          sx={{ marginBottom: "10px" }}
         />
-
-        {/* Scrollable Chat List */}
-        <List sx={{ marginTop: "10px", overflowY: "auto", flexGrow: 1 }}>
+        <List sx={{ overflowY: "auto", flexGrow: 1 }}>
           {filteredPeople.map((person, index) => (
             <React.Fragment key={index}>
-              <ListItem 
-                button 
+              <ListItem
+                button
                 onClick={() => setSelectedChat(person)}
+                selected={selectedChat?.name === person.name}
                 sx={{
-                  backgroundColor: selectedChat?.name === person.name ? "#33415C" : "transparent",
+                  backgroundColor: selectedChat?.name === person.name ? "#778DA9" : "transparent",
                   borderRadius: "10px",
+                  mb: 1,
+                  "&:hover": { backgroundColor: "#415A77" },
                 }}
               >
                 <ListItemText
-                  primary={person.name}
-                  secondary={person.messages[person.messages.length - 1].text}
-                  secondaryTypographyProps={{ sx: { color: "#778DA9", paddingLeft:"15px" } }}
-                  sx={{ color: "white" }}
+                  primary={<Typography sx={{ color: "white", fontWeight: 500 }}>{person.name}</Typography>}
+                  secondary={<Typography sx={{ color: "#ccc", fontSize: "12px" }} noWrap>
+                    {person.messages[person.messages.length - 1]?.text || person.messages[person.messages.length - 1]?.file}
+                  </Typography>}
                 />
               </ListItem>
-              {index !== people.length - 1 && <Divider sx={{ backgroundColor: "#778DA9" }} />}
+              <Divider sx={{ backgroundColor: "#2C3E50" }} />
             </React.Fragment>
           ))}
         </List>
       </div>
 
+
       {/* Right Chat Window */}
-      <div style={{ flex: 1, backgroundColor: "#415A77", display: "flex", flexDirection: "column", paddingTop:"10px" }}>
+      <div style={{ 
+          flex: 1, 
+          backgroundColor: "#415A77", 
+          display: "flex", 
+          flexDirection: "column", 
+          paddingTop: "10px", 
+          height: "90vh",
+          overflow: "hidden"
+        }}>
+
         {selectedChat ? (
           <>
             {/* Chat Header */}
@@ -121,7 +183,7 @@ function Chats() {
             </div>
 
             {/* Chat Messages (Scrollable) */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "20px", color: "white", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px", color: "white", display: "flex", flexDirection: "column"}}>
               {selectedChat.messages.map((msg, index) => (
                 <div key={index} style={{ 
                   alignSelf: msg.sender === "You" ? "flex-end" : "flex-start", 
@@ -133,38 +195,61 @@ function Chats() {
                   color: "white"
                 }}>
                   {msg.text}
+                  {msg.file && (
+                    <div>
+                      📎 <a href="#" style={{ color: "#BBE1FA" }}>{msg.file}</a>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
             {/* Message Input (Fixed at Bottom) */}
-            <div style={{ padding: "10px", backgroundColor: "#1B263B", display: "flex", alignItems: "center", position: "sticky", bottom: "0", width: "100%", paddingBottom: "75px" }}>
-              <TextField
-                variant="outlined"
-                placeholder="Type a message..."
-                fullWidth
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newMessage.trim() !== "") {
-                    sendMessage();
-                  }
-                }}
-                InputProps={{
-                  sx: { borderRadius: "30px", backgroundColor: "white" }
-                }}
-                sx={{
-                  width:"975px",
-                  '& .MuiOutlinedInput-root': { borderRadius: "30px", backgroundColor: "white" },
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: "#778DA9" },
-                }}
-              />
-              <Button 
-                onClick={sendMessage}
-                startIcon = {<FaPaperPlane width={"45px"} color='#778da9' />}
-                sx={{ marginLeft: "10px"}}
-              >
-              </Button>
+            <div style={{
+              padding: "10px 20px",
+              backgroundColor: "#1B263B",
+              borderTop: "1px solid #ccc"
+            }}>
+              {renderFilePreview()}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <input
+                  type="file"
+                  id="fileInput"
+                  style={{ display: "none" }}
+                  onChange={(e) => setSelectedFile(e.target.files[0])}
+                />
+                <Button
+                  onClick={() => document.getElementById('fileInput').click()}
+                  sx={{ marginRight: "10px", color: "#778DA9" }}
+                >
+                  <FaPaperclip size={20} />
+                </Button>
+                <TextField
+                  variant="outlined"
+                  placeholder="Type a message..."
+                  fullWidth
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (newMessage.trim() !== "" || selectedFile)) {
+                      sendMessage();
+                    }
+                  }}
+                  InputProps={{
+                    sx: { borderRadius: "30px", backgroundColor: "white" }
+                  }}
+                  sx={{
+                    width: "975px",
+                    '& .MuiOutlinedInput-root': { borderRadius: "30px", backgroundColor: "white" },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: "#778DA9" },
+                  }}
+                />
+                <Button 
+                  onClick={sendMessage}
+                  startIcon={<FaPaperPlane width={"45px"} color='#778da9' />}
+                  sx={{ marginLeft: "10px"}}
+                />
+              </div>
             </div>
           </>
         ) : (
