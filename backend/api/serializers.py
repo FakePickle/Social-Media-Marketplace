@@ -6,7 +6,15 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message)
+from .models import (
+    Chat,
+    CustomUser,
+    Friendship,
+    Group,
+    GroupMessage,
+    MarketPlace,
+    Message,
+)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -446,6 +454,11 @@ class GroupMessageSerializer(serializers.ModelSerializer):
 
 
 class MarketPlaceSerializer(serializers.ModelSerializer):
+    created_by = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
+    created_at = serializers.DateTimeField(default=timezone.now, read_only=True)
+
     class Meta:
         model = MarketPlace
         fields = ["id", "name", "description", "price", "created_by", "created_at"]
@@ -456,7 +469,7 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
         if not created_by:
             raise serializers.ValidationError({"created_by": "This field is required."})
         try:
-            created_by_user = CustomUser.objects.get(email=created_by)
+            created_by_user = CustomUser.objects.get(username=created_by)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError({"created_by": "User does not exist."})
 
@@ -472,19 +485,22 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
         instance.price = validated_data.get("price", instance.price)
         instance.save()
         return instance
-    
+
     def delete(self, instance):
         """Delete a marketplace item"""
         instance.delete()
         return {"message": "Marketplace item deleted successfully."}
-    
+
     def validate(self, data):
         """Ensure item name is unique"""
         item_name = data.get("name")
         if MarketPlace.objects.filter(name=item_name).exists():
-            raise serializers.ValidationError("Marketplace item with this name already exists.")
+            raise serializers.ValidationError(
+                "Marketplace item with this name already exists."
+            )
+        return data
 
-            
+
 class TOTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     totp_code = serializers.CharField(min_length=6, max_length=6, required=True)

@@ -24,10 +24,27 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import PermissionDenied
 
-from .models import Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message, VerificationCode
-from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
-                          GroupSerializer, LoginSerializer, MarketPlaceSerializer, MessageSerializer,
-                          RegisterSerializer, TOTPVerificationSerializer)
+from .models import (
+    Chat,
+    CustomUser,
+    Friendship,
+    Group,
+    GroupMessage,
+    MarketPlace,
+    Message,
+    VerificationCode,
+)
+from .serializers import (
+    ChatSerializer,
+    FriendshipSerializer,
+    GroupMessageSerializer,
+    GroupSerializer,
+    LoginSerializer,
+    MarketPlaceSerializer,
+    MessageSerializer,
+    RegisterSerializer,
+    TOTPVerificationSerializer,
+)
 
 
 class RegisterView(APIView):
@@ -142,46 +159,49 @@ class VerifyEmailView(APIView):
     def post(self, request):
         code = request.data.get("otp")
         email = request.data.get("email")
-        
+
         if not code or not email:
             return Response(
                 {"error": "Email and verification code are required"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
         print(f"Verifying code {code} for {email}")
-        
+
         try:
             # Find verification record by email
             verification = VerificationCode.objects.get(email=email)
-            
+
             # Check expiration
             if verification.is_expired():
                 verification.delete()  # Clean up expired records
                 return Response(
                     {"error": "Verification code expired. Please request a new code."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Check code
             if code != verification.code:
                 return Response(
                     {"error": "Invalid verification code"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            
+
             # Create user from stored data
             registration_data = verification.data
             serializer = RegisterSerializer(data=registration_data)
-            
+
             if not serializer.is_valid():
                 return Response(
-                    {"error": "Invalid registration data", "details": serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {
+                        "error": "Invalid registration data",
+                        "details": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-                
+
             user = serializer.create(registration_data)
-            
+
             # Generate QR code for TOTP
             qr = qrcode.QRCode(version=1, box_size=10, border=4)
             qr.add_data(user.get_totp_uri())
@@ -204,13 +224,15 @@ class VerifyEmailView(APIView):
             )
         except VerificationCode.DoesNotExist:
             return Response(
-                {"error": "No verification found for this email. Please register first."},
-                status=status.HTTP_404_NOT_FOUND
+                {
+                    "error": "No verification found for this email. Please register first."
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
             return Response(
                 {"error": f"An error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -447,9 +469,10 @@ class MessageView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+
 class CombinedChatGroupView(APIView):
     permission_classes = [AllowAny]
-    
+
     def get(self, request):
         user = request.data.get("user")
         user_instance = get_object_or_404(CustomUser, username=user)
@@ -458,27 +481,29 @@ class CombinedChatGroupView(APIView):
         groups = Group.objects.filter(members=user_instance)
 
         if not (chats.exists() or groups.exists()):
-            return Response({"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Fetch last messages for chats
         chat_last_messages = {}
         for chat in chats:
-            last_message = chat.messages.order_by('-timestamp').first()
+            last_message = chat.messages.order_by("-timestamp").first()
             if last_message:
                 chat_last_messages[chat.id] = {
                     "content": last_message.content,
-                    "timestamp": last_message.timestamp.isoformat()
+                    "timestamp": last_message.timestamp.isoformat(),
                 }
 
         # Fetch and decrypt last messages for groups
         group_last_messages = {}
         for group in groups:
-            last_message = group.messages.order_by('-timestamp').first()
+            last_message = group.messages.order_by("-timestamp").first()
             if last_message:
                 decrypted_content = self.decrypt_group_message(last_message)
                 group_last_messages[group.id] = {
                     "content": decrypted_content,
-                    "timestamp": last_message.timestamp.isoformat()
+                    "timestamp": last_message.timestamp.isoformat(),
                 }
 
         # Serialize both
@@ -488,39 +513,49 @@ class CombinedChatGroupView(APIView):
         # Add last messages to serialized chats
         for chat_data in chat_serializer.data:
             chat_data["type"] = "chat"
-            chat_id = chat_data.get('id')
+            chat_id = chat_data.get("id")
             chat_data["id"] = chat_id
-            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get("content")
-            chat_data["last_message_timestamp"] = chat_last_messages.get(chat_id, {}).get("timestamp")
+            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get(
+                "content"
+            )
+            chat_data["last_message_timestamp"] = chat_last_messages.get(
+                chat_id, {}
+            ).get("timestamp")
 
         # Add last messages to serialized groups
         for group_data in group_serializer.data:
             group_data["type"] = "group"
-            group_id = group_data.get('id')
+            group_id = group_data.get("id")
             group_data["id"] = group_id
-            group_data["last_message"] = group_last_messages.get(group_id, {}).get("content")
-            group_data["last_message_timestamp"] = group_last_messages.get(group_id, {}).get("timestamp")
+            group_data["last_message"] = group_last_messages.get(group_id, {}).get(
+                "content"
+            )
+            group_data["last_message_timestamp"] = group_last_messages.get(
+                group_id, {}
+            ).get("timestamp")
 
         # Combine and sort
         combined_list = chat_serializer.data + group_serializer.data
         sorted_list = sorted(
             combined_list,
-            key=lambda x: x.get('last_message_timestamp') or '',
-            reverse=True
+            key=lambda x: x.get("last_message_timestamp") or "",
+            reverse=True,
         )
 
-        return Response({
-            "results": sorted_list,
-            "chat_count": len(chat_serializer.data),
-            "group_count": len(group_serializer.data)
-        })
+        return Response(
+            {
+                "results": sorted_list,
+                "chat_count": len(chat_serializer.data),
+                "group_count": len(group_serializer.data),
+            }
+        )
 
     def decrypt_group_message(self, group_message):
         try:
             ciphertext = bytes.fromhex(group_message.content)
             private_key = serialization.load_pem_private_key(
                 group_message.group.private_key.encode(),
-                password=config("RSA_PASSPHRASE").encode()
+                password=config("RSA_PASSPHRASE").encode(),
             )
             plain_text = private_key.decrypt(
                 ciphertext,
@@ -528,12 +563,12 @@ class CombinedChatGroupView(APIView):
                     mgf=padding.MGF1(hashes.SHA256()),
                     algorithm=hashes.SHA256(),
                     label=None,
-                )
+                ),
             )
             return plain_text.decode()
         except Exception as e:
             return f"Error decrypting message: {str(e)}"
-    
+
 
 class GroupCreateView(APIView):
     permission_classes = [AllowAny]
@@ -588,51 +623,65 @@ class GroupDetailView(APIView):
 class MarketPlaceListCreateView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
+    permission_classes = [AllowAny]
 
-    def perform_create(self, serializer):
-        # Automatically set the created_by field to the current user
-        serializer.save(created_by=self.request.user)
+    def get(self, request):
+        # List all marketplace items
+        items = self.queryset.all()
+        serializer = self.serializer_class(items, many=True)
+        return Response(serializer.data)
 
-    def get_queryset(self):
-        # Optional: Add filtering capabilities
-        queryset = MarketPlace.objects.all()
-        name = self.request.query_params.get('name', None)
-        if name is not None:
-            queryset = queryset.filter(name__icontains=name)
-        return queryset
+    def post(self, request):
+        # Create a new marketplace item
+        print(request.data)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            print("Valid data:", serializer.validated_data)
+            item = serializer.save(created_by=request.data.get("created_by"))
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# Retrieve, Update, and Delete View
+
 class MarketPlaceDetailView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
+    permission_classes = [AllowAny]  # Allow read for all, write for authenticated
 
-    def perform_update(self, serializer):
+    def put(self, request, pk):
         # Ensure only the creator can update
-        if self.request.user != serializer.instance.created_by:
+        instance = get_object_or_404(self.queryset, pk=pk)
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        if request.data.get("created_by") != serializer.instance.created_by.username:
             raise PermissionDenied("You can only update your own marketplace items")
-        serializer.save()
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
 
-    def perform_destroy(self, instance):
+    def delete(self, request, pk):
         # Ensure only the creator can delete
-        if self.request.user != instance.created_by:
+        instance = get_object_or_404(self.queryset, pk=pk)
+        if request.data.get("created_by") != instance.created_by.username:
             raise PermissionDenied("You can only delete your own marketplace items")
         instance.delete()
+        return Response({"Status: success"}, status=status.HTTP_204_NO_CONTENT)
 
-# Optional: View for user's own marketplace items
+
 class UserMarketPlaceListView(APIView):
     serializer_class = MarketPlaceSerializer
 
-    def get_queryset(self):
+    def get(self):
         # Return only the items created by the current user
         return MarketPlace.objects.filter(created_by=self.request.user)
 
-# Optional: View for available (unsold) items only
+
 class AvailableMarketPlaceListView(APIView):
     serializer_class = MarketPlaceSerializer
 
-    def get_queryset(self):
+    def get(self):
         # Return only unsold items
         return MarketPlace.objects.filter(is_sold=False)
+
+
 class VerifyTOTPView(APIView):
     permission_classes = [AllowAny]
 
