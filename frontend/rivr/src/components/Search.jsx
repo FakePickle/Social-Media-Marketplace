@@ -1,53 +1,97 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { TextField, InputAdornment, Typography, List, ListItem, ListItemText, Button, Modal, Box, Avatar } from "@mui/material";
 import { FaSearch } from "react-icons/fa";
-
+import api from "../utils/api";
+import { AuthContext } from "../contexts/AuthContext";
 function Search() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
-  const [requests, setRequests] = useState([
-    { id: 1, name: "Michael Scott", message: "Sent you a friend request" },
-    { id: 2, name: "Pam Beesly", message: "Sent you a friend request" },
-    { id: 3, name: "Jim Halpert", message: "Sent you a friend request" }
-  ]);
-
-  const peopleList = [
-    ["https://randomuser.me/api/portraits/men/1.jpg", "John Doe", "I am a Software Engineer", false],
-    ["https://randomuser.me/api/portraits/women/2.jpg", "Jane Smith", "Graphic Designer by passion", true],
-    ["https://randomuser.me/api/portraits/women/3.jpg", "Alice Johnson", "Product Manager at TechCorp", false],
-    ["https://randomuser.me/api/portraits/men/4.jpg", "Bob Brown", "Data Scientist & AI enthusiast", true],
-    ["https://randomuser.me/api/portraits/men/5.jpg", "Charlie Davis", "Marketing Specialist", false],
-    ["https://randomuser.me/api/portraits/women/6.jpg", "Emily White", "UX Designer, dreamer", false],
-    ["https://randomuser.me/api/portraits/men/7.jpg", "Frank Green", "DevOps Engineer & coffee lover", true],
-    ["https://randomuser.me/api/portraits/women/8.jpg", "Grace Lee", "Content Creator at BuzzFeed", false],
-    ["https://randomuser.me/api/portraits/women/9.jpg", "Hannah Adams", "HR Specialist", true],
-    ["https://randomuser.me/api/portraits/men/10.jpg", "Ian Black", "Mobile Developer", false],
-    ["https://randomuser.me/api/portraits/women/11.jpg", "Jackie Brown", "Business Analyst & gamer", true],
-    ["https://randomuser.me/api/portraits/women/12.jpg", "Karen Clark", "Project Coordinator", false],
-    ["https://randomuser.me/api/portraits/men/13.jpg", "Liam Davis", "Full Stack Developer", true],
-    ["https://randomuser.me/api/portraits/women/14.jpg", "Mia Evans", "Digital Marketer", false],
-    ["https://randomuser.me/api/portraits/men/15.jpg", "Nathan Ford", "Cybersecurity Expert", false],
-    ["https://randomuser.me/api/portraits/women/16.jpg", "Olivia Green", "SEO Specialist & blogger", true],
-  ];
+  const [people, setPeople] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reqLoading, setReqLoading] = useState(true);
+  const userData = useContext(AuthContext)
   
-  const people = peopleList.map(([profilePic, name, bio, isFriend], index) => ({
-    id: index + 1,
-    profilePic,
-    name,
-    bio,
-    isFriend,
-  }));
+  //[users[username,pfp, bio, isFriend], count of users]
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await api.get("/users");
+        const formatted = res.data.users.map((user, index) => ({
+          id: user.id || index + 1,
+          profilePic: user.profile_picture_url,
+          name: user.username,
+          bio: user.bio,
+          isFriend: user.is_friend,
+        }));
+        
+        setPeople(formatted);
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUsers();
+  }, []);
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await api.get("friendships/", {
+          params: { username: userData.userData.username },
+        });
+  
+        // Map the user object to extract name, message, etc.
+        const formattedRequests = res.data.map((req, index) => ({
+          id: req.user.id || index + 1,
+          name: req.user.username,
+          message: req.user.bio || "No bio provided.",
+          profilePic: req.user.profile_picture || "", // fallback if no profile pic
+        }));
+  
+        setRequests(formattedRequests);
+      } catch (err) {
+        console.error("Failed to fetch friend requests:", err);
+      } finally {
+        setReqLoading(false);
+      }
+    };
+  
+    fetchRequests();
+  }, []);
   
 
-
-  const handleAccept = (id) => {
-    setRequests(requests.filter((request) => request.id !== id));
-    alert("Request accepted!");
+  const handleAccept = async (friendUsername) => {
+    try {
+      await api.put("friendships/accept/", {user: userData.userData.username,
+        friend: friendUsername,
+        status: "accept",
+      });
+      setRequests((prev) => prev.filter((r) => r.name !== friendUsername));
+      alert("Request accepted!");
+    } catch (err) {
+      alert("Failed to accept request.");
+      console.error(err);
+    }
   };
+  
+  
 
-  const handleDecline = (id) => {
-    setRequests(requests.filter((request) => request.id !== id));
-    alert("Request declined!");
+  const handleDecline = async (friendUsername) => {
+    try {
+      await api.delete("/friendships/delete/", {
+        data: {
+          user: userData.userData.username,
+          friend: friendUsername,
+        },
+      });
+      setRequests((prev) => prev.filter((r) => r.name !== friendUsername));
+      alert("Request declined!");
+    } catch (err) {
+      alert("Failed to decline request.");
+      console.error(err);
+    }
   };
 
   return (
@@ -61,7 +105,7 @@ function Search() {
         {/* Search Bar */}
         <TextField
           variant="outlined"
-          placeholder="Search Chats"
+          placeholder="Search People"
           fullWidth
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)} 
@@ -180,7 +224,7 @@ function Search() {
                   variant="contained"
                   color="success"
                   size="small"
-                  onClick={() => handleAccept(request.id)}
+                  onClick={() => handleAccept(request.name)}
                 >
                   Accept
                 </Button>
@@ -188,7 +232,7 @@ function Search() {
                   variant="contained"
                   color="error"
                   size="small"
-                  onClick={() => handleDecline(request.id)}
+                  onClick={() => handleDecline(request.name)}
                 >
                   Decline
                 </Button>
@@ -229,10 +273,7 @@ function Search() {
                 <Button
                   variant="contained"
                   color="error"
-                  onClick={() => {
-                    alert("Friend removed!");
-                    setSelectedUser(null);
-                  }}
+                  onClick={handleDecline(selectedUser.name)}
                 >
                   Remove Friend
                 </Button>
@@ -240,9 +281,18 @@ function Search() {
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={() => {
-                    alert("Friend request sent!");
-                    setSelectedUser(null);
+                  onClick={async () => {
+                    try {
+                      await api.post("friendships/", {
+                        user: userData.userData.username,
+                        friend: selectedUser.name,
+                      });
+                      alert("Friend request sent!");
+                      setSelectedUser(null);
+                    } catch (err) {
+                      alert("Failed to send friend request.");
+                      console.error(err);
+                    }
                   }}
                 >
                   Add Friend

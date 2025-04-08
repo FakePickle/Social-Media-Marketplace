@@ -290,6 +290,7 @@ class FriendshipView(APIView):
         """
         request_user = request.data.get("user")
         friend_user = request.data.get("friend")
+        # print(friend_user, request_user)
         if not request_user or not friend_user:
             return Response(
                 {"error": "Both user and friend are required."},
