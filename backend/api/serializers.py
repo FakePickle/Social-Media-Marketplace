@@ -1,8 +1,9 @@
 import random
+from datetime import datetime
 
 import pyotp
-from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message)
@@ -50,20 +51,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Email already exists.")
         return value
 
-    def generate_otp(self):
-        """Generate a random 6-digit OTP"""
-        return str(random.randint(100000, 999999))
-
-    def save(self):
-        request = self.context["request"]
-        code = self.generate_otp()
-        request.session["registration_data"] = self.validated_data
-        request.session["verification_code"] = code
-        request.session.modified = True
-        return code
-
     def create(self, validated_data):
         """Create a new user with TOTP setup"""
+        # Convert date string back to date object if needed
+        if "dob" in validated_data and isinstance(validated_data["dob"], str):
+            validated_data["dob"] = datetime.strptime(
+                validated_data["dob"], "%Y-%m-%d"
+            ).date()
+
         # Create the base user first
         user = CustomUser(
             email=validated_data["email"],
@@ -120,20 +115,24 @@ class OTPSerializer(serializers.Serializer):
 
         # Check if the OTP is valid
         totp = pyotp.TOTP(user.totp_secret)
-        if not totp.verify(totp):
+        if not totp.verify(data.get("otp")):
             raise serializers.ValidationError("Invalid OTP.")
 
         return data
 
 
 class ChatSerializer(serializers.ModelSerializer):
-    user1 = serializers.SlugRelatedField(slug_field='username', queryset=CustomUser.objects.all())
-    user2 = serializers.SlugRelatedField(slug_field='username', queryset=CustomUser.objects.all())
+    user1 = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
+    user2 = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
     messages = MessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Chat
-        fields = ['id', 'user1', 'user2', 'created_at', 'messages']
+        fields = ["id", "user1", "user2", "created_at", "messages"]
 
     def create(self, validated_data):
         """Create a new chat instance"""
@@ -151,7 +150,6 @@ class ChatSerializer(serializers.ModelSerializer):
         chat = Chat.objects.create(user1=user1_instance, user2=user2_instance)
 
         return chat
-        
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -289,18 +287,12 @@ class FriendshipSerializer(serializers.Serializer):
 
 
 class GroupSerializer(serializers.ModelSerializer):
-    members = serializers.ListField(
-        child=serializers.CharField(), write_only=True
-    )
+    members = serializers.ListField(child=serializers.CharField(), write_only=True)
     member_details = serializers.SlugRelatedField(
-        many=True,
-        read_only=True,
-        slug_field='username',
-        source='members'
+        many=True, read_only=True, slug_field="username", source="members"
     )
     created_by = serializers.SlugRelatedField(
-        slug_field="username",
-        queryset=CustomUser.objects.all()
+        slug_field="username", queryset=CustomUser.objects.all()
     )
 
     class Meta:
@@ -320,7 +312,9 @@ class GroupSerializer(serializers.ModelSerializer):
         if users.count() != len(member_usernames):
             found_usernames = set(users.values_list("username", flat=True))
             missing = set(member_usernames) - found_usernames
-            raise serializers.ValidationError({"members": f"Users not found: {', '.join(missing)}"})
+            raise serializers.ValidationError(
+                {"members": f"Users not found: {', '.join(missing)}"}
+            )
 
         # Validate creator
         try:
@@ -348,18 +342,21 @@ class GroupSerializer(serializers.ModelSerializer):
         member_usernames = validated_data.get("members", None)
         if member_usernames is not None:
             users = CustomUser.objects.filter(username__in=member_usernames)
-            
+
             # Check if all usernames provided are valid
             if users.count() != len(member_usernames):
-                invalid_usernames = set(member_usernames) - set(users.values_list("username", flat=True))
+                invalid_usernames = set(member_usernames) - set(
+                    users.values_list("username", flat=True)
+                )
                 raise serializers.ValidationError(
-                    {"members": f"The following usernames are invalid: {', '.join(invalid_usernames)}"}
+                    {
+                        "members": f"The following usernames are invalid: {', '.join(invalid_usernames)}"
+                    }
                 )
 
             instance.add_member(users)
 
         return instance
-
 
     def remove_member_by_name(self, group_name, member_username):
         """Remove a specific member from the group using group name and member username"""
@@ -375,7 +372,7 @@ class GroupSerializer(serializers.ModelSerializer):
             group.members.remove(member)
         else:
             raise serializers.ValidationError("Member not in group.")
-        
+
         return group
 
     def delete_group_by_name(self, group_name, requested_by_username):
@@ -390,13 +387,13 @@ class GroupSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User does not exist.")
 
         if group.created_by != user:
-            raise serializers.ValidationError("Only the group creator can delete the group.")
-        
+            raise serializers.ValidationError(
+                "Only the group creator can delete the group."
+            )
+
         group.delete()
         return {"message": f"Group '{group_name}' deleted successfully."}
 
-
-    
     def validate(self, data):
         """Ensure group name is unique"""
         group_name = data.get("name")
@@ -486,4 +483,31 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
         item_name = data.get("name")
         if MarketPlace.objects.filter(name=item_name).exists():
             raise serializers.ValidationError("Marketplace item with this name already exists.")
+
+            
+class TOTPVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    totp_code = serializers.CharField(min_length=6, max_length=6, required=True)
+
+    def validate(self, data):
+        email = data.get("email")
+        totp_code = data.get("totp_code")
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User not found")
+
+        if not user.totp_secret:
+            raise serializers.ValidationError("2FA not set up for this user")
+
+        # Verify the TOTP code
+        import pyotp
+
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(totp_code):
+            raise serializers.ValidationError("Invalid authentication code")
+
+        # Store user in the validated data for the view
+        data["user"] = user
         return data

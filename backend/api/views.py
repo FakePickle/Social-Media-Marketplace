@@ -1,16 +1,20 @@
 import ast
 import base64
 import io
+from datetime import date, timedelta
+import random
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from decouple import config
 
 import qrcode
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.mail import message, send_mail
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status
@@ -20,10 +24,10 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import PermissionDenied
 
-from .models import Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message
+from .models import Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message, VerificationCode
 from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
                           GroupSerializer, LoginSerializer, MarketPlaceSerializer, MessageSerializer,
-                          RegisterSerializer)
+                          RegisterSerializer, TOTPVerificationSerializer)
 
 
 class RegisterView(APIView):
@@ -32,25 +36,65 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
-            code = serializer.save()
-
+            # Generate a secure random code
+            code = "".join([str(random.randint(0, 9)) for _ in range(6)])
             email = serializer.validated_data["email"]
-            send_mail(
-                subject="Welcome to Rivr - Verify your account",
-                message=f"Please verify your account using the following code: {code}",
-                from_email=config["EMAIL_HOST_USER"],
-                recipient_list=[email],
-                fail_silently=False,
-            )
 
-            return Response(
-                {
+            # Standardize the data format
+            registration_data = {}
+            for key, value in serializer.validated_data.items():
+                if isinstance(value, date):
+                    registration_data[key] = value.isoformat()
+                else:
+                    registration_data[key] = value
+
+            # Create or update verification record with 15 min expiry
+            expires_at = timezone.now() + timedelta(minutes=15)
+
+            try:
+                # Update existing verification or create new one
+                verification, created = VerificationCode.objects.update_or_create(
+                    email=email,
+                    defaults={
+                        "code": code,
+                        "data": registration_data,
+                        "expires_at": expires_at,
+                    },
+                )
+
+                # Log for debugging
+                if created:
+                    print(f"Created new verification code for {email}")
+                else:
+                    print(f"Updated verification code for {email}")
+
+                # Send verification email
+                send_mail(
+                    subject="Welcome to Rivr - Verify your account",
+                    message=f"Please verify your account using the following code: {code}",
+                    from_email=settings.EMAIL_HOST_USER,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+
+                # Return response without including sensitive data
+                response_data = {
                     "message": "Verification code sent to your email.",
                     "email": email,
-                    "verify-endpoint": "/otp/verify-email/",
-                },
-                status=status.HTTP_200_OK,
-            )
+                    "verify-endpoint": "/api/verify-email/",
+                }
+
+                # Only include code in development environment
+                if settings.DEBUG:
+                    response_data["code"] = code
+
+                return Response(response_data, status=status.HTTP_200_OK)
+
+            except Exception as e:
+                return Response(
+                    {"error": f"Failed to generate verification code: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -96,46 +140,78 @@ class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        code = request.data.get("code")
+        code = request.data.get("otp")
         email = request.data.get("email")
-        if not code or code != request.session.get("verification_code"):
+        
+        if not code or not email:
             return Response(
-                {"error": "Invalid or expired code"}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Email and verification code are required"},
+                status=status.HTTP_400_BAD_REQUEST
             )
+            
+        print(f"Verifying code {code} for {email}")
+        
+        try:
+            # Find verification record by email
+            verification = VerificationCode.objects.get(email=email)
+            
+            # Check expiration
+            if verification.is_expired():
+                verification.delete()  # Clean up expired records
+                return Response(
+                    {"error": "Verification code expired. Please request a new code."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check code
+            if code != verification.code:
+                return Response(
+                    {"error": "Invalid verification code"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create user from stored data
+            registration_data = verification.data
+            serializer = RegisterSerializer(data=registration_data)
+            
+            if not serializer.is_valid():
+                return Response(
+                    {"error": "Invalid registration data", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            user = serializer.create(registration_data)
+            
+            # Generate QR code for TOTP
+            qr = qrcode.QRCode(version=1, box_size=10, border=4)
+            qr.add_data(user.get_totp_uri())
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
 
-        registration_data = request.session.get("registration_data")
-        if not registration_data or registration_data["email"] != email:
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
             return Response(
-                {"error": "Session expired or email mismatch. Please register again."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "message": "Account created successfully.",
+                    "instructions": "Scan this QR code in your authenticator app.",
+                    "qr_code": f"data:image/png;base64,{qr_code}",
+                    "secret_key": user.get_secret(),
+                    "totp_uri": user.get_totp_uri(),
+                },
+                status=status.HTTP_201_CREATED,
             )
-
-        serializer = RegisterSerializer(data=registration_data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.create(registration_data)
-
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(user.get_totp_uri())
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        del request.session["registration_data"]
-        del request.session["verification_code"]
-
-        return Response(
-            {
-                "message": "Account created successfully.",
-                "instructions": "Scan this QR code in your authenticator app.",
-                "qr_code": f"data:image/png;base64,{qr_code}",
-                "secret_key": user.get_secret(),
-                "email": user.email,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        except VerificationCode.DoesNotExist:
+            return Response(
+                {"error": "No verification found for this email. Please register first."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # class OTPVerifyView(APIView):
@@ -249,7 +325,9 @@ class ChatListCreateView(APIView):
         # Get all chats for the current user
         chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
         if not chats.exists():
-            return Response({"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND
+            )
         serializer = ChatSerializer(chats, many=True)
         return Response(serializer.data)
 
@@ -281,7 +359,9 @@ class MessageView(APIView):
                 )
 
             # Get all messages for the group
-            messages = GroupMessage.objects.filter(group=group_obj).order_by("timestamp")
+            messages = GroupMessage.objects.filter(group=group_obj).order_by(
+                "timestamp"
+            )
             if not messages.exists():
                 return Response(
                     {"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND
@@ -293,7 +373,10 @@ class MessageView(APIView):
                     content = ast.literal_eval(msg.content)
                     # Decrypt the message content
                     decrypted = GroupMessage.decrypt_message(
-                        content["ciphertext"], content["signature"], msg.sender, group_obj
+                        content["ciphertext"],
+                        content["signature"],
+                        msg.sender,
+                        group_obj,
                     )
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
@@ -303,7 +386,6 @@ class MessageView(APIView):
                 serialized_messages.append(message_data)
 
             return Response(serialized_messages)
-
 
         # If sender and receiver are provided (DM chat history)
         if sender_username and receiver_username:
@@ -463,7 +545,9 @@ class GroupCreateView(APIView):
         # Get all groups for the current user
         groups = Group.objects.filter(members=user_instance)
         if not groups.exists():
-            return Response({"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND
+            )
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data)
 
@@ -549,3 +633,37 @@ class AvailableMarketPlaceListView(APIView):
     def get_queryset(self):
         # Return only unsold items
         return MarketPlace.objects.filter(is_sold=False)
+class VerifyTOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = TOTPVerificationSerializer(data=request.data)
+
+        if serializer.is_valid():
+            user = serializer.validated_data["user"]
+
+            # Mark user as verified if not already
+            if not user.is_verified:
+                user.is_verified = True
+                user.save()
+
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+
+            return Response(
+                {
+                    "message": "Authentication successful",
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                    "user": {
+                        "email": user.email,
+                        "username": user.username,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "is_verified": user.is_verified,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

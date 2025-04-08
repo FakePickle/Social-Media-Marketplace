@@ -3,13 +3,14 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
 from .views import (AvailableMarketPlaceListView, LoginView, MarketPlaceDetailView, MarketPlaceListCreateView, RegisterView,
                     MessageView, GroupCreateView, GroupDetailView,
-                    FriendshipView, CombinedChatGroupView, UserMarketPlaceListView, VerifyEmailView,
+                    FriendshipView, CombinedChatGroupView, UserMarketPlaceListView, VerifyEmailView, VerifyTOTPView,
                     )
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
     path("login/", LoginView.as_view(), name="login"),
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
+    path("verify-2fa/", VerifyTOTPView.as_view(), name="verify-2fa"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     # path("users/", UserView.as_view(), name="user-list"),

@@ -23,6 +23,9 @@ AUTH_USER_MODEL = "api.CustomUser"
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
 
 # Application definition
 
@@ -141,13 +144,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
+# Session settings
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400 # 1 day in seconds
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 # Security settings
 # SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_AGE = 300
-# SESSION_COOKIE_SECURE = True
-SESSION_COOKIE_HTTPONLY = True
+# SESSION_COOKIE_AGE = 300
+# SESSION_COOKIE_SECURE = False
+# SESSION_COOKIE_SAMESITE = "Lax"
+# SESSION_COOKIE_HTTPONLY = True
 # CSRF_COOKIE_SECURE = True
 # SECURE_BROWSER_XSS_FILTER = True
 # SECURE_CONTENT_TYPE_NOSNIFF = True

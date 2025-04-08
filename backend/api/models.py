@@ -6,6 +6,7 @@ from decouple import config
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 # Generate a key for encryption
 key = Fernet.generate_key()
@@ -415,3 +416,17 @@ class MarketPlace(models.Model):
 
     def __str__(self):
         return self.name
+
+        
+class VerificationCode(models.Model):
+    email = models.EmailField(unique=True)
+    code = models.CharField(max_length=6)
+    data = models.JSONField()  # Store registration data
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+        
+    def __str__(self):
+        return f"Verification code for {self.email}"
