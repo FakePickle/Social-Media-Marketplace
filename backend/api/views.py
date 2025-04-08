@@ -141,6 +141,7 @@ class LoginView(APIView):
                     {
                         "refresh": str(refresh),
                         "access": str(refresh.access_token),
+                        "email": user.email,  # Return email for 2FA verification
                     },
                     status=status.HTTP_200_OK,
                 )
@@ -688,11 +689,16 @@ class VerifyTOTPView(APIView):
                     "refresh": str(refresh),
                     "access": str(refresh.access_token),
                     "user": {
+                        "id": user.id,
                         "email": user.email,
                         "username": user.username,
                         "first_name": user.first_name,
                         "last_name": user.last_name,
+                        "bio": user.bio,
                         "is_verified": user.is_verified,
+                        "is_admin": user.is_staff,
+                        "date_joined": user.date_joined,
+                        "profile_picture": user.profile_picture.url if user.profile_picture else None
                     },
                 },
                 status=status.HTTP_200_OK,

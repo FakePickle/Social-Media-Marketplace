@@ -6,6 +6,7 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('userData')) || null);
 
   useEffect(() => {
     const validateToken = async () => {
@@ -22,6 +23,8 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         // Token is invalid or expired
         clearTokens();
+        localStorage.removeItem('userData');
+        setUserData(null);
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
@@ -31,12 +34,21 @@ export const AuthProvider = ({ children }) => {
     validateToken();
   }, []);
 
+  // Function to save user data to localStorage
+  const saveUserData = (data) => {
+    localStorage.setItem('userData', JSON.stringify(data));
+    setUserData(data);
+  };
+
   const login = async (email, password) => {
     try {
       const { data } = await api.post("login/", { email, password });
-      updateTokens(data.access, data.refresh);
-      setIsAuthenticated(true);
-      return data; // Return the response data which includes the email
+      
+      // Only update tokens after 2FA verification, not here
+      // Just store the email for 2FA verification
+      localStorage.setItem('pendingAuthEmail', email);
+      
+      return data;
     } catch (error) {
       setIsAuthenticated(false);
       throw error.response?.data || { error: "Login failed" };
@@ -49,6 +61,8 @@ export const AuthProvider = ({ children }) => {
       api.post("token/blacklist/", { refresh }).catch(() => {});
     }
     clearTokens();
+    localStorage.removeItem('userData');
+    setUserData(null);
     setIsAuthenticated(false);
   };
 
@@ -91,6 +105,19 @@ export const AuthProvider = ({ children }) => {
       if (response.data.access && response.data.refresh) {
         updateTokens(response.data.access, response.data.refresh);
         setIsAuthenticated(true);
+        
+        // Save user data if available in response
+        if (response.data.user) {
+          saveUserData(response.data.user);
+        } else {
+          // If user data not provided in response, fetch it separately
+          try {
+            const userResponse = await api.get('users/profile/');
+            saveUserData(userResponse.data);
+          } catch (err) {
+            console.error('Failed to fetch user data:', err);
+          }
+        }
       }
 
       return response.data;
@@ -109,7 +136,9 @@ export const AuthProvider = ({ children }) => {
       verify2FA, 
       isAuthenticated, 
       setIsAuthenticated,
-      isLoading
+      isLoading,
+      userData,
+      setUserData: saveUserData
     }}>
       {children}
     </AuthContext.Provider>
