@@ -113,7 +113,7 @@ class RegisterView(APIView):
                 return Response(
                     {"error": f"Failed to generate verification code: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -377,7 +377,7 @@ class MessageView(APIView):
                 "timestamp"
             )
             if not messages.exists():
-                return Response(
+                    return Response(
                     {"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
