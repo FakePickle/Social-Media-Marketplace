@@ -176,11 +176,18 @@ function Auth() {
     }
   };
 
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       handleLogin();
     }
   };
+
+  if (isForgotPassword) {
+    return (
+      <ForgotPassw></ForgotPassw>)}
+
+
   if (isConfirmingEmail){
     return (
     <div style={styles.wrapper}>
@@ -362,6 +369,9 @@ function Auth() {
               />
               <Button variant="contained" sx={styles.actionButton} onClick={handleLogin}>
                 Log In
+              </Button>
+              <Button variant="text" onClick={() => setIsForgotPassword(true)} sx={{ marginTop: "10px" }}>
+                Forgot Password?
               </Button>
             </>
           ) : (
