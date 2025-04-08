@@ -1,9 +1,9 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
-from .views import (LoginView, RegisterView,
+from .views import (AvailableMarketPlaceListView, LoginView, MarketPlaceDetailView, MarketPlaceListCreateView, RegisterView,
                     MessageView, GroupCreateView, GroupDetailView,
-                    FriendshipView, CombinedChatGroupView, VerifyEmailView,
+                    FriendshipView, CombinedChatGroupView, UserMarketPlaceListView, VerifyEmailView,
                     )
 
 urlpatterns = [
@@ -20,4 +20,12 @@ urlpatterns = [
     path('friendships/', FriendshipView.as_view(), name='friendship-list-create'),
     path('friendships/delete/', FriendshipView.as_view(), name='friendship-delete'),
     path('allChats/', CombinedChatGroupView.as_view(), name='all-chats'),
+    # List all items and create new ones
+    path('marketplace/', MarketPlaceListCreateView.as_view(), name='marketplace-list-create'),
+    # Retrieve, update, or delete specific item
+    path('marketplace/<int:pk>/', MarketPlaceDetailView.as_view(), name='marketplace-detail'),
+    # List current user's items
+    path('marketplace/my-items/', UserMarketPlaceListView.as_view(), name='my-marketplace-items'),
+    # List available (unsold) items
+    path('marketplace/available/', AvailableMarketPlaceListView.as_view(), name='available-marketplace-items'),
 ]

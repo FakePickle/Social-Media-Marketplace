@@ -18,12 +18,11 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.exceptions import PermissionDenied
 
-from api import serializers
-
-from .models import Chat, CustomUser, Friendship, Group, GroupMessage, Message
+from .models import Chat, CustomUser, Friendship, Group, GroupMessage, MarketPlace, Message
 from .serializers import (ChatSerializer, FriendshipSerializer, GroupMessageSerializer,
-                          GroupSerializer, LoginSerializer, MessageSerializer,
+                          GroupSerializer, LoginSerializer, MarketPlaceSerializer, MessageSerializer,
                           RegisterSerializer)
 
 
@@ -501,3 +500,52 @@ class GroupDetailView(APIView):
             return Response(GroupSerializer(group).data)
 
 
+# List and Create View
+class MarketPlaceListCreateView(APIView):
+    queryset = MarketPlace.objects.all()
+    serializer_class = MarketPlaceSerializer
+
+    def perform_create(self, serializer):
+        # Automatically set the created_by field to the current user
+        serializer.save(created_by=self.request.user)
+
+    def get_queryset(self):
+        # Optional: Add filtering capabilities
+        queryset = MarketPlace.objects.all()
+        name = self.request.query_params.get('name', None)
+        if name is not None:
+            queryset = queryset.filter(name__icontains=name)
+        return queryset
+
+# Retrieve, Update, and Delete View
+class MarketPlaceDetailView(APIView):
+    queryset = MarketPlace.objects.all()
+    serializer_class = MarketPlaceSerializer
+
+    def perform_update(self, serializer):
+        # Ensure only the creator can update
+        if self.request.user != serializer.instance.created_by:
+            raise PermissionDenied("You can only update your own marketplace items")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Ensure only the creator can delete
+        if self.request.user != instance.created_by:
+            raise PermissionDenied("You can only delete your own marketplace items")
+        instance.delete()
+
+# Optional: View for user's own marketplace items
+class UserMarketPlaceListView(APIView):
+    serializer_class = MarketPlaceSerializer
+
+    def get_queryset(self):
+        # Return only the items created by the current user
+        return MarketPlace.objects.filter(created_by=self.request.user)
+
+# Optional: View for available (unsold) items only
+class AvailableMarketPlaceListView(APIView):
+    serializer_class = MarketPlaceSerializer
+
+    def get_queryset(self):
+        # Return only unsold items
+        return MarketPlace.objects.filter(is_sold=False)
