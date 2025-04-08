@@ -1,33 +1,43 @@
 import React, { useState } from "react";
-import { TextField, InputAdornment, Typography, List, ListItem, ListItemText, Button } from "@mui/material";
+import { TextField, InputAdornment, Typography, List, ListItem, ListItemText, Button, Modal, Box, Avatar } from "@mui/material";
 import { FaSearch } from "react-icons/fa";
 
 function Search() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState(null);
   const [requests, setRequests] = useState([
     { id: 1, name: "Michael Scott", message: "Sent you a friend request" },
     { id: 2, name: "Pam Beesly", message: "Sent you a friend request" },
     { id: 3, name: "Jim Halpert", message: "Sent you a friend request" }
   ]);
 
-  const people = [
-    { id: 1, name: "John Doe", profilePic: "path/to/john.jpg", bio: "I am a Software Engineer" },
-    { id: 2, name: "Jane Smith", profilePic: "path/to/jane.jpg", bio: "I am a Graphic Designer" },
-    { id: 3, name: "Alice Johnson", profilePic: "path/to/alice.jpg", bio: "Product Manager" },
-    { id: 4, name: "Bob Brown", profilePic: "path/to/bob.jpg", bio: "Data Scientist" },
-    { id: 5, name: "Charlie Davis", profilePic: "path/to/charlie.jpg", bio: "Marketing Specialist" },
-    { id: 6, name: "Emily White", profilePic: "path/to/emily.jpg", bio: "UX Designer" },
-    { id: 7, name: "Frank Green", profilePic: "path/to/frank.jpg", bio: "DevOps Engineer" },
-    { id: 8, name: "Grace Lee", profilePic: "path/to/grace.jpg", bio: "Content Creator" },
-    { id: 9, name: "Hannah Adams", profilePic: "path/to/hannah.jpg", bio: "HR Specialist" },
-    { id: 10, name: "Ian Black", profilePic: "path/to/ian.jpg", bio: "Mobile Developer" },
-    { id: 11, name: "Jackie Brown", profilePic: "path/to/jackie.jpg", bio: "Business Analyst" },
-    { id: 12, name: "Karen Clark", profilePic: "path/to/karen.jpg", bio: "Project Coordinator" },
-    { id: 13, name: "Liam Davis", profilePic: "path/to/liam.jpg", bio: "Full Stack Developer" },
-    { id: 14, name: "Mia Evans", profilePic: "path/to/mia.jpg", bio: "Digital Marketer" },
-    { id: 15, name: "Nathan Ford", profilePic: "path/to/nathan.jpg", bio: "Cybersecurity Expert" },
-    { id: 16, name: "Olivia Green", profilePic: "path/to/olivia.jpg", bio: "SEO Specialist" }
+  const peopleList = [
+    ["https://randomuser.me/api/portraits/men/1.jpg", "John Doe", "I am a Software Engineer", false],
+    ["https://randomuser.me/api/portraits/women/2.jpg", "Jane Smith", "Graphic Designer by passion", true],
+    ["https://randomuser.me/api/portraits/women/3.jpg", "Alice Johnson", "Product Manager at TechCorp", false],
+    ["https://randomuser.me/api/portraits/men/4.jpg", "Bob Brown", "Data Scientist & AI enthusiast", true],
+    ["https://randomuser.me/api/portraits/men/5.jpg", "Charlie Davis", "Marketing Specialist", false],
+    ["https://randomuser.me/api/portraits/women/6.jpg", "Emily White", "UX Designer, dreamer", false],
+    ["https://randomuser.me/api/portraits/men/7.jpg", "Frank Green", "DevOps Engineer & coffee lover", true],
+    ["https://randomuser.me/api/portraits/women/8.jpg", "Grace Lee", "Content Creator at BuzzFeed", false],
+    ["https://randomuser.me/api/portraits/women/9.jpg", "Hannah Adams", "HR Specialist", true],
+    ["https://randomuser.me/api/portraits/men/10.jpg", "Ian Black", "Mobile Developer", false],
+    ["https://randomuser.me/api/portraits/women/11.jpg", "Jackie Brown", "Business Analyst & gamer", true],
+    ["https://randomuser.me/api/portraits/women/12.jpg", "Karen Clark", "Project Coordinator", false],
+    ["https://randomuser.me/api/portraits/men/13.jpg", "Liam Davis", "Full Stack Developer", true],
+    ["https://randomuser.me/api/portraits/women/14.jpg", "Mia Evans", "Digital Marketer", false],
+    ["https://randomuser.me/api/portraits/men/15.jpg", "Nathan Ford", "Cybersecurity Expert", false],
+    ["https://randomuser.me/api/portraits/women/16.jpg", "Olivia Green", "SEO Specialist & blogger", true],
   ];
+  
+  const people = peopleList.map(([profilePic, name, bio, isFriend], index) => ({
+    id: index + 1,
+    profilePic,
+    name,
+    bio,
+    isFriend,
+  }));
+  
 
 
   const handleAccept = (id) => {
@@ -48,7 +58,7 @@ function Search() {
           Search
         </Typography>
 
-        {/* Search Bar without Dropdown */}
+        {/* Search Bar */}
         <TextField
           variant="outlined"
           placeholder="Search Chats"
@@ -90,6 +100,22 @@ function Search() {
               .map((person) => (
                 <div
                   key={person.id}
+                  onClick={() => setSelectedUser(person)}
+                  style={{
+                    backgroundColor: "#415A77",
+                    borderRadius: "10px",
+                    padding: "15px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    transition: "transform 0.2s ease",
+                  }}
+                >
+
+                <div
+                  key={person.id}
                   style={{
                     backgroundColor: "#415A77",
                     borderRadius: "10px",
@@ -117,6 +143,7 @@ function Search() {
                     {person.bio}
                   </Typography>
                 </div>
+                </div>
               ))}
           </div>
         </div>
@@ -127,7 +154,7 @@ function Search() {
       {/* Right Chat Window */}
       <div style={{ flex: 1, backgroundColor: "#415A77", display: "flex", flexDirection: "column", padding: "10px" }}>
         {/* Requests Section */}
-        <Typography variant="h4" color="#778DA9" style={{ marginBottom: "20px" }}>
+        <Typography variant="h4" color="white" style={{ marginBottom: "20px" }}>
           Requests
         </Typography>
         <List>
@@ -170,7 +197,64 @@ function Search() {
           ))}
         </List>
       </div>
+      <Modal open={!!selectedUser} onClose={() => setSelectedUser(null)}>
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            bgcolor: "#1B263B",
+            borderRadius: "15px",
+            boxShadow: 24,
+            p: 4,
+            minWidth: 300,
+            textAlign: "center",
+          }}
+        >
+          {selectedUser && (
+            <>
+              <Avatar
+                src={selectedUser.profilePic}
+                alt={selectedUser.name}
+                sx={{ width: 100, height: 100, margin: "0 auto", mb: 2 }}
+              />
+              <Typography variant="h6" color="#E0E1DD" gutterBottom>
+                {selectedUser.name}
+              </Typography>
+              <Typography variant="body2" color="#778DA9" gutterBottom>
+                {selectedUser.bio}
+              </Typography>
+              {selectedUser.isFriend ? (
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={() => {
+                    alert("Friend removed!");
+                    setSelectedUser(null);
+                  }}
+                >
+                  Remove Friend
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => {
+                    alert("Friend request sent!");
+                    setSelectedUser(null);
+                  }}
+                >
+                  Add Friend
+                </Button>
+              )}
+            </>
+          )}
+        </Box>
+      </Modal>
+
     </div>
+    
   );
 }
 
