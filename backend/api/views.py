@@ -631,15 +631,29 @@ class MarketPlaceDetailView(APIView):
     serializer_class = MarketPlaceSerializer
     permission_classes = [AllowAny]  # Allow read for all, write for authenticated
 
+    def get_object(self, pk):
+        """Helper method to get the object with permission check"""
+        obj = get_object_or_404(MarketPlace, pk=pk)
+        if self.request.data.get("created_by") != obj.created_by.username:
+            raise PermissionDenied("You can only modify your own marketplace items")
+        return obj
+
     def put(self, request, pk):
-        # Ensure only the creator can update
-        instance = get_object_or_404(self.queryset, pk=pk)
-        serializer = self.serializer_class(instance, data=request.data, partial=True)
-        if request.data.get("created_by") != serializer.instance.created_by.username:
-            raise PermissionDenied("You can only update your own marketplace items")
+        """Update a marketplace item"""
+        instance = self.get_object(pk)
+        serializer = MarketPlaceSerializer(
+            instance,
+            data=request.data,
+            partial=True,  # Allow partial updates
+            context={"request": request},
+        )
+        print("Updating item:", request.data)
         if serializer.is_valid():
+            print("Valid data:", serializer.validated_data)
             serializer.save()
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        # Added explicit return for invalid case
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         # Ensure only the creator can delete
@@ -855,6 +869,7 @@ class ResetPasswordView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
 class ListUserView(APIView):
     permission_classes = [AllowAny]
 
@@ -864,18 +879,21 @@ class ListUserView(APIView):
             active_users = CustomUser.objects.filter(is_active=True)
 
             # Serialize the users using UserListSerializer
-            serializer = UserListSerializer(active_users, many=True, context={'request': request})
+            serializer = UserListSerializer(
+                active_users, many=True, context={"request": request}
+            )
 
-            return Response({
-                "users": serializer.data,
-                "count": active_users.count()
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {"users": serializer.data, "count": active_users.count()},
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
             return Response(
                 {"error": f"Failed to fetch users: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 class UserProfileView(APIView):
     permission_classes = [AllowAny]
@@ -885,27 +903,28 @@ class UserProfileView(APIView):
             if user_id:
                 # Get specific user profile
                 user = CustomUser.objects.get(id=user_id, is_active=True)
-                serializer = UserProfileSerializer(user, context={'request': request})
+                serializer = UserProfileSerializer(user, context={"request": request})
             else:
                 # Get current user's profile if authenticated
                 if not request.user.is_authenticated:
                     return Response(
                         {"error": "Authentication required"},
-                        status=status.HTTP_401_UNAUTHORIZED
+                        status=status.HTTP_401_UNAUTHORIZED,
                     )
-                serializer = UserProfileSerializer(request.user, context={'request': request})
+                serializer = UserProfileSerializer(
+                    request.user, context={"request": request}
+                )
 
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except CustomUser.DoesNotExist:
             return Response(
-                {"error": "User not found"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
             return Response(
                 {"error": f"Failed to fetch user profile: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def put(self, request, user_id=None):
@@ -914,8 +933,7 @@ class UserProfileView(APIView):
                 # Update specific user profile (admin only)
                 if not request.user.is_staff:
                     return Response(
-                        {"error": "Permission denied"},
-                        status=status.HTTP_403_FORBIDDEN
+                        {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
                     )
                 user = CustomUser.objects.get(id=user_id, is_active=True)
             else:
@@ -923,16 +941,18 @@ class UserProfileView(APIView):
                 if not request.user.is_authenticated:
                     return Response(
                         {"error": "Authentication required"},
-                        status=status.HTTP_401_UNAUTHORIZED
+                        status=status.HTTP_401_UNAUTHORIZED,
                     )
                 user = request.user
 
             # Handle profile picture upload
-            if 'profile_picture' in request.FILES:
-                user.profile_picture = request.FILES['profile_picture']
+            if "profile_picture" in request.FILES:
+                user.profile_picture = request.FILES["profile_picture"]
 
             # Update other fields
-            serializer = UserProfileSerializer(user, data=request.data, partial=True, context={'request': request})
+            serializer = UserProfileSerializer(
+                user, data=request.data, partial=True, context={"request": request}
+            )
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -940,11 +960,10 @@ class UserProfileView(APIView):
 
         except CustomUser.DoesNotExist:
             return Response(
-                {"error": "User not found"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
             return Response(
                 {"error": f"Failed to update user profile: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

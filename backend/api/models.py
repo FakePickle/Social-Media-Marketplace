@@ -399,7 +399,7 @@ class MarketPlace(models.Model):
     created_by = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="created_marketplaces"
     )
-    image = models.ImageField(upload_to="marketplace_images/", null=True, blank=True)
+    image = models.TextField(null=True, blank=True)
     price = models.CharField(max_length=20, null=True, blank=True)
     upi_id = models.CharField(max_length=100, null=True, blank=True)
     is_sold = models.BooleanField(default=False)

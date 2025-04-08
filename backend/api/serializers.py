@@ -1,4 +1,3 @@
-import random
 from datetime import datetime
 
 import pyotp
@@ -453,9 +452,11 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "price",
+            "image",
             "upi_id",
             "created_by",
             "created_at",
+            "is_sold",  # Added to match your database schema
         ]
 
     def create(self, validated_data):
@@ -463,25 +464,23 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
         created_by = validated_data.pop("created_by", None)
         if not created_by:
             raise serializers.ValidationError({"created_by": "This field is required."})
+
         try:
             created_by_user = CustomUser.objects.get(username=created_by)
-            if created_by_user.is_verified == False:
+            if not created_by_user.is_verified:
                 raise serializers.ValidationError(
                     {"created_by": "User is not verified."}
                 )
-            elif created_by_user.address == "":
+            if not created_by_user.address:
                 raise serializers.ValidationError(
                     {"created_by": "User address is not set."}
                 )
-            elif validated_data.get("upi_id") == "":
-                raise serializers.ValidationError(
-                    {"created_by": "User UPI ID is not set."}
-                )
+            if not validated_data.get("upi_id"):  # Check for None or empty string
+                raise serializers.ValidationError({"upi_id": "User UPI ID is not set."})
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError({"created_by": "User does not exist."})
 
         validated_data["created_by"] = created_by_user
-
         item = MarketPlace.objects.create(**validated_data)
         return item
 
@@ -490,21 +489,26 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
         instance.name = validated_data.get("name", instance.name)
         instance.description = validated_data.get("description", instance.description)
         instance.price = validated_data.get("price", instance.price)
+        # Use existing image if not provided in validated_data
+        instance.image = validated_data.get("image", instance.image)
+        print(validated_data.get("image"))
+        instance.upi_id = validated_data.get("upi_id", instance.upi_id)
+        instance.is_sold = validated_data.get("is_sold", instance.is_sold)
         instance.save()
         return instance
 
-    def delete(self, instance):
-        """Delete a marketplace item"""
-        instance.delete()
-        return {"message": "Marketplace item deleted successfully."}
-
     def validate(self, data):
-        """Ensure item name is unique"""
+        """Ensure item name is unique, excluding the current instance for updates"""
+        print(data)
         item_name = data.get("name")
-        if MarketPlace.objects.filter(name=item_name).exists():
-            raise serializers.ValidationError(
-                "Marketplace item with this name already exists."
-            )
+        if item_name:
+            queryset = MarketPlace.objects.filter(name=item_name)
+            if self.instance:  # If updating, exclude the current instance
+                queryset = queryset.exclude(id=self.instance.id)
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    "Marketplace item with this name already exists."
+                )
         return data
 
 

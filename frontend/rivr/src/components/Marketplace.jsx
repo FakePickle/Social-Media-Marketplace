@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Grid,
   Card,
@@ -20,6 +20,7 @@ import {
 import '../utils/api.js';
 import { Search,  ShoppingCart, RemoveShoppingCart, Add } from "@mui/icons-material";
 import api from "../utils/api.js";
+import {AuthContext} from "../contexts/AuthContext.jsx";
 
 const Marketplace = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,17 +34,20 @@ const Marketplace = () => {
   const [paymentDetails, setPaymentDetails] = useState({  upi_id: "" });
   const [products, setProducts] = useState([]); // Initialize products state
   const [newProduct, setNewProduct] = useState({
-    title: "",
+    name: "",
     description: "",
     price: "",
     image: "",
     upi_id: "",
+    created_by: "",
   });
   const filteredProducts = products.filter(
     (product) =>
-      product.is_active &&
-      product.title.toLowerCase().includes(searchQuery.toLowerCase())
+      product.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Auth Context
+  const userdata = useContext(AuthContext);
 
   // api call to fetch products
   useEffect(() => {
@@ -51,15 +55,17 @@ const Marketplace = () => {
       try {
         api.defaults.headers.common["Authorization"] = `Bearer ${localStorage.getItem("access_token")}`;
         const response = await api.get("marketplace/");
-        const data = await response.json();
-        setProducts(data);
+        console.log(response.data); // Changed from response["data"]
+        setProducts(response.data); // Changed from response["data"]
       } catch (error) {
         console.error("Error fetching products:", error);
       }
     };
 
     fetchProducts();
-  })
+    console.log("userdata", userdata);
+    filteredProducts.sort((a, b) => a.price - b.price); // Sort products by price
+  }, []); // Added dependency array
 
 
   const handleOpenModal = (product) => {
@@ -77,21 +83,30 @@ const Marketplace = () => {
     setCart((prev) => prev.filter((item) => item.listing_id !== id));
   };
   const handleAddProduct = () => {
-    if (!newProduct.title || !newProduct.description || !newProduct.price || !newProduct.image_url) {
+    if (!newProduct.name || !newProduct.description || !newProduct.price || !newProduct.image) {
       alert("Please fill in all fields.");
       return;
     }
 
+    newProduct.created_by = userdata.userData.username; // Set created_by to the user's email
+
+    const addProductbackend = api
+    .post("marketplace/", newProduct)
+    .then((response) => {
+      console.log("Product added successfully:", response.data);
+    })
+    .catch((error) => {
+      console.error("Error adding product:", error);
+    });
+    console.log("addProductbackend", addProductbackend);
     const newEntry = {
       ...newProduct,
-      is_active: true,
       price: parseFloat(newProduct.price),
-      listing_id: Date.now(),
     };
     console.log("newEntry", newEntry);
 
     setProducts((prev) => [...prev, newEntry]);
-    setNewProduct({ title: "", description: "", price: "", image_url: "", upi_id: "" });
+    setNewProduct({ name: "", description: "", price: "", image: "", upi_id: "" });
     setAddModalOpen(false);
   };
   const handleBuyNow = (product) => {
@@ -132,7 +147,7 @@ const Marketplace = () => {
       {/* Product Grid */}
       <Grid container spacing={3} sx={{ marginTop: "20px",maxHeight: "79vh",overflowY: "auto",paddingRight: "5px",}}>
         {filteredProducts.map((product) => (
-          <Grid item key={product.listing_id} xs={12} sm={6} md={4} lg={3}>
+          <Grid item key={product.id} xs={12} sm={6} md={4} lg={3}>
             <Card
               sx={{
                 backgroundColor: "#2A3B5D",
@@ -146,8 +161,8 @@ const Marketplace = () => {
               <CardMedia
                 component="img"
                 height="140"
-                image={product.image_url}
-                alt={product.title}
+                image={product.image}
+                alt={product.name}
                 sx={{
                   borderTopLeftRadius: "12px",
                   borderTopRightRadius: "12px",
@@ -155,7 +170,7 @@ const Marketplace = () => {
               />
               <CardContent>
                 <Typography variant="h6" sx={{ color: "white", fontWeight: "bold" }}>
-                  {product.title}
+                  {product.name}
                 </Typography>
                 <Typography variant="body1" color="gray">
                   ${product.price}
@@ -181,12 +196,12 @@ const Marketplace = () => {
               <CardMedia
                 component="img"
                 height="200"
-                image={selectedProduct.image_url}
-                alt={selectedProduct.title}
+                image={selectedProduct.image}
+                alt={selectedProduct.name}
                 sx={{ borderRadius: "8px" }}
               />
               <Typography variant="h5" fontWeight="bold" sx={{ marginTop: 2 }}>
-                {selectedProduct.title}
+                {selectedProduct.name}
               </Typography>
               <Typography variant="h6" color="lightgray" sx={{ marginTop: "10px" }}>
                 ${selectedProduct.price}
@@ -233,7 +248,7 @@ const Marketplace = () => {
             <>
               {cart.map((item) => (
                 <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-                  <Typography>{item.title} - ${item.price}</Typography>
+                  <Typography>{item.name} - ${item.price}</Typography>
                   <IconButton onClick={() => removeFromCart(item.listing_id)} sx={{ color: "red" }}>
                     <RemoveShoppingCart />
                   </IconButton>
@@ -270,8 +285,8 @@ const Marketplace = () => {
               fullWidth
               label="Title"
               variant="outlined"
-              value={newProduct.title}
-              onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+              value={newProduct.name}
+              onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
               sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
             />
             <TextField
@@ -295,8 +310,16 @@ const Marketplace = () => {
               fullWidth
               label="Image URL"
               variant="outlined"
-              value={newProduct.image_url}
-              onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
+              value={newProduct.image}
+              onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+              sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
+            />
+            <TextField
+              fullWidth
+              label="UPI ID"
+              variant="outlined"
+              value={newProduct.upi_id}
+              onChange={(e) => setNewProduct({ ...newProduct, upi_id: e.target.value })}
               sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
             />
             <Box sx={{ textAlign: "center" }}>
@@ -343,7 +366,7 @@ const Marketplace = () => {
               <Typography variant="h6" fontWeight="bold">Order Summary</Typography>
               {cart.map((item) => (
                 <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
-                  <Typography>{item.title}</Typography>
+                  <Typography>{item.name}</Typography>
                   <Typography>${item.price}</Typography>
                 </Box>
               ))}
