@@ -71,12 +71,18 @@ function Search() {
 
         {/* Search Results Grid */}
         {searchQuery && (
+        <div
+          style={{
+            marginTop: "20px",
+            maxHeight: "75vh", 
+            overflowY: "auto",
+          }}
+        >
           <div
             style={{
-              marginTop: "20px",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: "20px"
+              gap: "20px",
             }}
           >
             {people
@@ -113,7 +119,9 @@ function Search() {
                 </div>
               ))}
           </div>
-        )}
+        </div>
+      )}
+
       </div>
 
       {/* Right Chat Window */}
