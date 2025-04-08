@@ -244,20 +244,28 @@ class FriendshipView(APIView):
     serializer_class = FriendshipSerializer
     permission_classes = [AllowAny]
 
-    def get(self, username):
-        """
-        Get all friendships that are not accepted yet.
-        """
-        user = self.request.query_params.get("username")
+    def get(self, request):
+        user = request.query_params.get("username")
         if not user:
             return Response(
                 {"error": "User is required."}, status=status.HTTP_400_BAD_REQUEST
             )
+
+        print(f"Looking up user: {user}")
         user_instance = get_object_or_404(CustomUser, username=user)
+
         friendships = self.queryset.filter(
             friend__username=user_instance.username, is_accepted=False
         )
+        print("Found friendships:", friendships)
+
+        if not friendships.exists():
+            return Response(
+                {"detail": "No friendships found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
         serializer = self.serializer_class(friendships, many=True)
+        print("Serialized:", serializer.data)
         return Response(serializer.data)
 
     def post(self, request):
