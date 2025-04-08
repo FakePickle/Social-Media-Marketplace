@@ -290,11 +290,16 @@ class FriendshipView(APIView):
 
     def get(self, request):
         """
-        Get all friendships for the current user.
+        Get all friendships that are not accepted yet.
         """
-        user = request.user
-        friendships = Friendship.objects.filter(user=user) | Friendship.objects.filter(
-            friend=user
+        user = request.data.get("user")
+        if not user:
+            return Response(
+                {"error": "User is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        user_instance = get_object_or_404(CustomUser, username=user)
+        friendships = self.queryset.filter(
+            friend__username=user_instance.username, is_accepted=False
         )
         serializer = self.serializer_class(friendships, many=True)
         return Response(serializer.data)
