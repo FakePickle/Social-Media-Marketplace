@@ -471,10 +471,6 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"created_by": "User is not verified."}
                 )
-            if not created_by_user.address:
-                raise serializers.ValidationError(
-                    {"created_by": "User address is not set."}
-                )
             if not validated_data.get("upi_id"):  # Check for None or empty string
                 raise serializers.ValidationError({"upi_id": "User UPI ID is not set."})
         except CustomUser.DoesNotExist:
@@ -482,6 +478,7 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
 
         validated_data["created_by"] = created_by_user
         item = MarketPlace.objects.create(**validated_data)
+        print(validated_data)
         return item
 
     def update(self, instance, validated_data):

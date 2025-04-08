@@ -47,7 +47,7 @@ const Marketplace = () => {
   );
 
   // Auth Context
-  const userdata = useContext(AuthContext);
+  const userData = useContext(AuthContext);
 
   // api call to fetch products
   useEffect(() => {
@@ -63,7 +63,6 @@ const Marketplace = () => {
     };
 
     fetchProducts();
-    console.log("userdata", userdata);
     filteredProducts.sort((a, b) => a.price - b.price); // Sort products by price
   }, []); // Added dependency array
 
@@ -87,8 +86,9 @@ const Marketplace = () => {
       alert("Please fill in all fields.");
       return;
     }
+    console.log(userData.userData)
 
-    newProduct.created_by = userdata.userData.username; // Set created_by to the user's email
+    newProduct.created_by = userData.userData.username; // Set created_by to the logged-in user's username
 
     const addProductbackend = api
     .post("marketplace/", newProduct)
