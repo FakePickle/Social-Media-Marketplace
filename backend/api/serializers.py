@@ -237,7 +237,7 @@ class FriendshipSerializer(serializers.Serializer):
         friend = validated_data.get("friend")
         status = validated_data.get("status")
 
-        if status != "accepted" and status != "rejected":
+        if status != "accepted":
             raise serializers.ValidationError("Invalid status.")
 
         # Ensure both users are valid
@@ -461,7 +461,15 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MarketPlace
-        fields = ["id", "name", "description", "price", "created_by", "created_at"]
+        fields = [
+            "id",
+            "name",
+            "description",
+            "price",
+            "upi_id",
+            "created_by",
+            "created_at",
+        ]
 
     def create(self, validated_data):
         """Create a new marketplace item"""

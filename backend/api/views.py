@@ -111,7 +111,7 @@ class RegisterView(APIView):
                 return Response(
                     {"error": f"Failed to generate verification code: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -315,6 +315,29 @@ class FriendshipView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def put(self, request):
+        """
+        Accept a friendship request.
+        """
+        request_user = request.data.get("user")
+        friend_user = request.data.get("friend")
+        if not request_user or not friend_user:
+            return Response(
+                {"error": "Both user and friend are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            try:
+                serializer.update_friendship(request.data)
+            except Friendship.DoesNotExist:
+                return Response(
+                    {"error": "Friendship does not exist."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     def delete(self, request):
         """
         Delete a friendship.
@@ -376,7 +399,7 @@ class MessageView(APIView):
 
             # Check sender permission
             if not group_obj.members.filter(username=sender_username).exists():
-                    return Response(
+                return Response(
                     {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -466,7 +489,7 @@ class MessageView(APIView):
             {
                 "error": "Invalid request: sender and group or sender and receiver required."
             },
-                    status=status.HTTP_400_BAD_REQUEST,
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
@@ -717,15 +740,15 @@ class VerifyTOTPView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class RequestPasswordResetView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = request.data.get("email")
         if not email:
             return Response(
-                {"error": "Email is required"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
@@ -760,31 +783,32 @@ class RequestPasswordResetView(APIView):
                     "email": email,
                     "verify-endpoint": "/api/verify-password-reset/",
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except CustomUser.DoesNotExist:
             return Response(
                 {"error": "No user found with this email"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
             return Response(
                 {"error": f"Failed to process request: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 class VerifyPasswordResetView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        code = request.data.get('code')
-        email = request.data.get('email')
+        code = request.data.get("code")
+        email = request.data.get("email")
 
         if not code or not email:
             return Response(
                 {"error": "Code and email are required"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -794,13 +818,12 @@ class VerifyPasswordResetView(APIView):
                 verification.delete()
                 return Response(
                     {"error": "Reset code has expired. Please request a new one."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             if code != verification.code:
                 return Response(
-                    {"error": "Invalid reset code"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Invalid reset code"}, status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Generate a temporary token for the reset process
@@ -811,37 +834,38 @@ class VerifyPasswordResetView(APIView):
                     "message": "Reset code verified successfully",
                     "reset_token": str(token.access_token),
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except VerificationCode.DoesNotExist:
             return Response(
                 {"error": "No reset request found for this email"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
             return Response(
                 {"error": f"Failed to verify code: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        token = request.data.get('reset_token')
-        new_password = request.data.get('new_password')
+        token = request.data.get("reset_token")
+        new_password = request.data.get("new_password")
 
         if not token or not new_password:
             return Response(
                 {"error": "Reset token and new password are required"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             # Verify the token
             token = AccessToken(token)
-            user = CustomUser.objects.get(id=token['user_id'])
+            user = CustomUser.objects.get(id=token["user_id"])
 
             # Update password
             user.set_password(new_password)
@@ -851,17 +875,16 @@ class ResetPasswordView(APIView):
             VerificationCode.objects.filter(email=user.email).delete()
 
             return Response(
-                {"message": "Password reset successfully"},
-                status=status.HTTP_200_OK
+                {"message": "Password reset successfully"}, status=status.HTTP_200_OK
             )
 
         except TokenError:
             return Response(
                 {"error": "Invalid or expired reset token"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
             return Response(
                 {"error": f"Failed to reset password: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

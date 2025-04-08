@@ -141,10 +141,7 @@ class Chat(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                fields=["user1", "user2"],
-                name="unique_user_chat"
-            )
+            models.UniqueConstraint(fields=["user1", "user2"], name="unique_user_chat")
         ]
 
     def __str__(self):
@@ -159,8 +156,9 @@ class Chat(models.Model):
 
 
 class Message(models.Model):
-    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="messages", null=True, blank=True)
-
+    chat = models.ForeignKey(
+        Chat, on_delete=models.CASCADE, related_name="messages", null=True, blank=True
+    )
 
     sender = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="sent_messages"
@@ -272,7 +270,9 @@ class Group(models.Model):
         on_delete=models.CASCADE,
         related_name="created_groups",
     )
-    members = models.ManyToManyField(CustomUser, related_name="group_members", null=True)
+    members = models.ManyToManyField(
+        CustomUser, related_name="group_members", null=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def generate_keys(self):
@@ -320,8 +320,7 @@ class GroupMessage(models.Model):
 
         # Load sender's private key (for signing)
         private_key = serialization.load_pem_private_key(
-            sender.private_key.encode(), 
-            password=config("RSA_PASSPHRASE").encode()
+            sender.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
         )
 
         # Sign the message
@@ -348,11 +347,7 @@ class GroupMessage(models.Model):
         )
 
         # Return both encrypted message and signature (you can encode with base64 or hex)
-        return {
-            "ciphertext": ciphertext.hex(),
-            "signature": signature.hex()
-        }
-
+        return {"ciphertext": ciphertext.hex(), "signature": signature.hex()}
 
     @staticmethod
     def decrypt_message(ciphertext_hex, signature_hex, sender, receiver):
@@ -366,8 +361,7 @@ class GroupMessage(models.Model):
 
         # Load receiver's private key (to decrypt message)
         private_key = serialization.load_pem_private_key(
-            receiver.private_key.encode(), 
-            password=config("RSA_PASSPHRASE").encode()
+            receiver.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
         )
 
         # Decrypt the message
@@ -407,7 +401,8 @@ class MarketPlace(models.Model):
         CustomUser, on_delete=models.CASCADE, related_name="created_marketplaces"
     )
     image = models.ImageField(upload_to="marketplace_images/", null=True, blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.CharField(max_length=20, null=True, blank=True)
+    upi_id = models.CharField(max_length=100, null=True, blank=True)
     is_sold = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -417,16 +412,16 @@ class MarketPlace(models.Model):
     def __str__(self):
         return self.name
 
-        
+
 class VerificationCode(models.Model):
     email = models.EmailField(unique=True)
     code = models.CharField(max_length=6)
     data = models.JSONField()  # Store registration data
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
-    
+
     def is_expired(self):
         return timezone.now() > self.expires_at
-        
+
     def __str__(self):
         return f"Verification code for {self.email}"
