@@ -412,7 +412,7 @@ class GroupMessageSerializer(serializers.ModelSerializer):
         group = validated_data["group"]
         message = validated_data["content"]
 
-        print(sender, group, message)
+        # print(sender, group, message)
 
         # Ensure sender and group are valid
         try:
@@ -426,7 +426,7 @@ class GroupMessageSerializer(serializers.ModelSerializer):
         validated_data["group"] = group_instance
 
         message = GroupMessage().encrypt_message(message, sender_user, group_instance)
-        print(f"Encrypted group message: {message}")
+        # print(f"Encrypted group message: {message}")
         # print(
         #     "Decrypted group message:",
         #     GroupMessage.decrypt_message(message, group_instance),
@@ -465,6 +465,18 @@ class MarketPlaceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"created_by": "This field is required."})
         try:
             created_by_user = CustomUser.objects.get(username=created_by)
+            if created_by_user.is_verified == False:
+                raise serializers.ValidationError(
+                    {"created_by": "User is not verified."}
+                )
+            elif created_by_user.address == "":
+                raise serializers.ValidationError(
+                    {"created_by": "User address is not set."}
+                )
+            elif validated_data.get("upi_id") == "":
+                raise serializers.ValidationError(
+                    {"created_by": "User UPI ID is not set."}
+                )
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError({"created_by": "User does not exist."})
 
