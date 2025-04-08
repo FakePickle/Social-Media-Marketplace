@@ -117,11 +117,12 @@ function Chats() {
   return (
     <div style={{ display: "flex", height: "90vh", overflow: "hidden" }}>
       {/* Left Sidebar - People List */}
-      <div style={{ width: "35vh", backgroundColor: "#1B263B", padding: "15px", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: "35vh", backgroundColor: "#1B263B", padding: "15px", display: "flex", flexDirection: "column", marginTop:'10px' }}>
         <TextField
           placeholder="Search"
           variant="outlined"
           size="small"
+          
           fullWidth
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
