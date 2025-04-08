@@ -6,6 +6,7 @@ from decouple import config
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 # Generate a key for encryption
 key = Fernet.generate_key()
@@ -41,7 +42,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=150)
     dob = models.DateField(null=True, blank=True)
-    phone_number = models.CharField(max_length=15, null=True, blank=True)
     address = models.CharField(max_length=255, null=True, blank=True)
     profile_picture = models.ImageField(
         upload_to="profile_pics/", null=True, blank=True
@@ -50,7 +50,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     public_key = models.TextField(null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
     totp_secret = models.CharField(max_length=32, blank=True)
+    # Mail verification
     is_verified = models.BooleanField(default=False)
+    # Admin approval
+    is_approved = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
@@ -102,14 +105,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def get_secret(self):
         return self.totp_secret
 
-
-class OTPVerification(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_verified = models.BooleanField(default=False)
-
     def verify_otp(self, otp):
-        totp = pyotp.TOTP(self.user.totp_secret)
+        totp = pyotp.TOTP(self.totp_secret)
         return totp.verify(otp)
 
 
@@ -176,14 +173,13 @@ class Message(models.Model):
 
     @staticmethod
     def encrypt_message(plain_text, sender, receiver):
-        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding
         from decouple import config
 
         # Load sender's private key (for signing)
         private_key = serialization.load_pem_private_key(
-            sender.private_key.encode(), 
-            password=config("RSA_PASSPHRASE").encode()
+            sender.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
         )
 
         # Sign the message
@@ -210,17 +206,13 @@ class Message(models.Model):
         )
 
         # Return both encrypted message and signature (you can encode with base64 or hex)
-        return {
-            "ciphertext": ciphertext.hex(),
-            "signature": signature.hex()
-        }
-
+        return {"ciphertext": ciphertext.hex(), "signature": signature.hex()}
 
     @staticmethod
     def decrypt_message(ciphertext_hex, signature_hex, sender, receiver):
-        from cryptography.hazmat.primitives import serialization, hashes
-        from cryptography.hazmat.primitives.asymmetric import padding
         from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
         from decouple import config
 
         ciphertext = bytes.fromhex(ciphertext_hex)
@@ -228,8 +220,7 @@ class Message(models.Model):
 
         # Load receiver's private key (to decrypt message)
         private_key = serialization.load_pem_private_key(
-            receiver.private_key.encode(), 
-            password=config("RSA_PASSPHRASE").encode()
+            receiver.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
         )
 
         # Decrypt the message
@@ -259,7 +250,6 @@ class Message(models.Model):
             return plain_text.decode()
         except InvalidSignature:
             raise ValueError("Signature verification failed!")
-
 
     def save(self, *args, **kwargs):
         if not self.chat:
@@ -407,3 +397,36 @@ class GroupMessage(models.Model):
             return plain_text.decode()
         except InvalidSignature:
             raise ValueError("Signature verification failed!")
+
+
+class MarketPlace(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="created_marketplaces"
+    )
+    image = models.ImageField(upload_to="marketplace_images/", null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    is_sold = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def create(self, **kwargs):
+        super().create(**kwargs)
+
+    def __str__(self):
+        return self.name
+
+        
+class VerificationCode(models.Model):
+    email = models.EmailField(unique=True)
+    code = models.CharField(max_length=6)
+    data = models.JSONField()  # Store registration data
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+        
+    def __str__(self):
+        return f"Verification code for {self.email}"

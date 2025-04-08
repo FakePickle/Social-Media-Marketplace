@@ -3,6 +3,7 @@ import React, { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import ForgotPassw from "../components/ForgotPassw";
+import api from "../utils/api";
 
 function Auth() {
   const { login, register, verifyData, verifyEmail, verifyTotp } = useContext(AuthContext);
@@ -21,22 +22,22 @@ function Auth() {
   const [dob, setDob] = useState("");
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
-  const navigate = useNavigate();
-  const handleSwap = () => {
-    setIsSwapped(!isSwapped);
-  };
+    const navigate = useNavigate();
+    const handleSwap = () => {
+        setIsSwapped(!isSwapped);
+    };
 
   useEffect(() => {
     return () => {
       // Cleanup sensitive state on unmount
-      setEmail("");
-      setPassword("");
-      setFirstName("");
-      setUsername("");
-      setLastName("");
-      setVerificationCode(["", "", "", "", "", ""]);
-      setQrCodeURL("");
-      settotpSecretKey("");
+      setEmail("")
+      setPassword("")
+      setFirstName("")
+      setUsername("")
+      setLastName("")
+      setVerificationCode(["", "", "", "", "", ""])
+      setQrCodeURL("")
+      settotpSecretKey("")
     };
   }, []);
 
@@ -70,9 +71,41 @@ function Auth() {
     }
   };
 
-  const handleIsConfirming = () => {
-    setIsConfirming(true);
-  };
+  // const handleUserRegistering = async () => {
+  //   if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
+  //     alert("All fields are required.");
+  //     return;
+  //   }
+  //   if (!isValidEmail(email)) {
+  //     alert("Please enter a valid email address.");
+  //     return;
+  //   }
+  //   try {
+  //     const [message, instructions, qrCodeURL, totp_uri] = await register(
+  //       email,
+  //       username,
+  //       password,
+  //       firstName,
+  //       lastName,
+  //       dob
+  //     );
+  
+  //     console.log("Message:", message);
+  //     console.log("Instructions:", instructions);
+  //     console.log("QR Code:", qrCodeURL);
+  //     console.log("TOTP URI:", totp_uri);
+  
+  //     setQrCodeURL(qrCodeURL);
+  //     settotpSecretKey(totp_uri);
+  //     setIsRegistering(true);
+  //   } catch (error) {
+  //     alert(error?.error || "Registration failed");
+  //   }
+  // };
+
+    const handleIsConfirming = () => {
+        setIsConfirming(true);
+    };
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -81,7 +114,8 @@ function Auth() {
     }
     try {
       await login(email, password);
-      setIsConfirming(true);
+      setIsConfirming(true)
+      
     } catch (err) {
       alert(err.error || "Login failed");
     }
@@ -95,12 +129,14 @@ function Auth() {
     }
   };
 
-  const handleVirtualKeyPress = (value) => {
-    const emptyIndex = verificationCode.findIndex((digit) => digit === "");
-    if (emptyIndex !== -1) {
-      handleVerificationInput(emptyIndex, value);
-    }
-  };
+  // const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const handleVirtualKeyPress = (value) => {
+        const emptyIndex = verificationCode.findIndex((digit) => digit === "");
+        if (emptyIndex !== -1) {
+            handleVerificationInput(emptyIndex, value);
+        }
+    };
 
   const handleDeletePress = () => {
     const filledIndex = verificationCode.findLastIndex((digit) => digit !== "");
@@ -117,12 +153,7 @@ function Auth() {
       alert(error.message);
     }
   };
-
-  const handleForgotPassword = () => {
-    setIsForgotPassword(true);
-  };
-
-
+  
   const handleRegisterConfirmSignUp = async () => {
     try {
       const otp = verificationCode.join("");
@@ -150,19 +181,14 @@ function Auth() {
       handleLogin();
     }
   };
-
-  if (isForgotPassword) {
-    return <ForgotPassw />;
-  }
-
-  if (isConfirmingEmail) {
+  if (isConfirmingEmail){
     return (
-      <div style={styles.wrapper}>
+    <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-        </div>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
         <Card sx={styles.confirmCard}>
-          <Typography variant="h4" sx={styles.title}>
+        <Typography variant="h4" sx={styles.title}>
             Email Verification
           </Typography>
           <Typography variant="h5" sx={styles.title}>
@@ -197,7 +223,7 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button variant="contained" onClick={handleEmailVerification} sx={styles.verifyButton}>
+          <Button variant="contained" onClick={ handleEmailVerification} sx={styles.verifyButton}>
             Verify
           </Button>
         </Card>
@@ -208,10 +234,10 @@ function Auth() {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-        </div>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
         <Card sx={styles.confirmCard}>
-          <Typography variant="h4" sx={styles.title}>
+        <Typography variant="h4" sx={styles.title}>
             2 Factor Authentication
           </Typography>
           <Typography variant="h5" sx={styles.title}>
@@ -246,11 +272,7 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button
-            variant="contained"
-            onClick={isRegistering ? handleRegisterConfirmSignUp : handleLoginConfirmSignUp}
-            sx={styles.verifyButton}
-          >
+          <Button variant="contained" onClick={ isRegistering? handleRegisterConfirmSignUp: handleLoginConfirmSignUp} sx={styles.verifyButton}>
             Verify
           </Button>
         </Card>
@@ -262,8 +284,8 @@ function Auth() {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-        </div>
+        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+      </div>
         <Card sx={styles.registerCard}>
           <Typography variant="h5" sx={styles.title}>
             Scan QR Code to Sign Up with Google
@@ -277,7 +299,7 @@ function Auth() {
             Use an Authenticator App to scan the QR code and then click NEXT.
           </Typography>
           <Typography variant="body2" sx={{ paddingBottom: "10px" }}>
-            OR Paste this secret key in your Authenticator App and then click NEXT.
+            OR  Paste this secret key in your Authenticator App and then click NEXT.
           </Typography>
           {totpSecretKey && (
             <>
@@ -292,7 +314,7 @@ function Auth() {
                   maxWidth: "90%",
                   paddingBottom: "10px",
                   fontSize: "0.75rem",
-                  color: "#333",
+                  color: "#333"
                 }}
               >
                 {totpSecretKey}
@@ -306,12 +328,13 @@ function Auth() {
       </div>
     );
   }
+  
 
-  return (
-    <div style={styles.wrapper}>
-      <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
+    return (
+        <div style={styles.wrapper}>
+            <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+                <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+            </div>
 
       <div style={{ display: "flex" }}>
         <Card sx={isSwapped ? styles.swappedCard : styles.activeCard}>
@@ -340,7 +363,6 @@ function Auth() {
               <Button variant="contained" sx={styles.actionButton} onClick={handleLogin}>
                 Log In
               </Button>
-              <Button variant="text" onClick={handleForgotPassword}>Forgot password?</Button>
             </>
           ) : (
             <>
@@ -354,186 +376,186 @@ function Auth() {
           )}
         </Card>
 
-        <Card sx={isSwapped ? styles.activeCard : styles.swappedCard}>
-          {!isSwapped ? (
-            <>
-              <Typography variant="h6" sx={{ marginBottom: "15px", textAlign: "center" }}>
-                Don't have an account?
-              </Typography>
-              <Button variant="outlined" onClick={handleSwap} sx={styles.swapButton}>
-                Register
-              </Button>
-            </>
-          ) : (
-            <>
-              <Typography variant="h4" sx={styles.title}>
-                Register
-              </Typography>
+                <Card sx={isSwapped ? styles.activeCard : styles.swappedCard}>
+                    {!isSwapped ? (
+                        <>
+                            <Typography variant="h6" sx={{ marginBottom: "15px", textAlign: "center" }}>
+                                Don't have an account?
+                            </Typography>
+                            <Button variant="outlined" onClick={handleSwap} sx={styles.swapButton}>
+                                Register
+                            </Button>
+                        </>
+                    ) : (
+                            <>
+                                <Typography variant="h4" sx={styles.title}>
+                                    Register
+                                </Typography>
 
-              <TextField
-                label="Username"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
+                                <TextField
+                                    label="Username"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "10px" }}
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                />
 
-              <TextField
-                label="First Name"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
+                                <TextField
+                                    label="First Name"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "10px" }}
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
+                                />
 
-              <TextField
-                label="Last Name"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
+                                <TextField
+                                    label="Last Name"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "10px" }}
+                                    value={lastName}
+                                    onChange={(e) => setLastName(e.target.value)}
+                                />
 
-              <TextField
-                label="Date of Birth"
-                type="date"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                InputLabelProps={{ shrink: true }}
-                value={dob}
-                onChange={(e) => setDob(e.target.value)}
-              />
+                                <TextField
+                                    label="Date of Birth"
+                                    type="date"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "10px" }}
+                                    InputLabelProps={{ shrink: true }}
+                                    value={dob}
+                                    onChange={(e) => setDob(e.target.value)}
+                                />
 
-              <TextField
-                label="Email"
-                type="email"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+                                <TextField
+                                    label="Email"
+                                    type="email"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "10px" }}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
 
-              <TextField
-                label="Password"
-                type="password"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "20px" }}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+                                <TextField
+                                    label="Password"
+                                    type="password"
+                                    variant="outlined"
+                                    fullWidth
+                                    sx={{ marginBottom: "20px" }}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                />
 
-              <Button variant="contained" onClick={handleDataVerification} sx={styles.actionButton}>
-                Register
-              </Button>
-            </>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
+                                <Button variant="contained" onClick={handleDataVerification} sx={styles.actionButton}>
+                                    Register
+                                </Button>
+                            </>
+                        )}
+                </Card>
+            </div>
+        </div>
+    );
 }
 
 const styles = {
-  wrapper: {
-    backgroundColor: "#1b263b",
-    minHeight: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmCard: {
-    width: "50vh",
-    height: "60vh",
-    backgroundColor: "#e0e1dd",
-    color: "black",
-    borderRadius: "25px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    textAlign: "center",
-  },
-  registerCard: {
-    width: "auto",
-    height: "auto",
-    backgroundColor: "#e0e1dd",
-    color: "black",
-    borderRadius: "25px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    textAlign: "center",
-  },
-  activeCard: {
-    width: "65vh",
-    height: "50vh",
-    backgroundColor: "#e0e1dd",
-    color: "black",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    transition: "all 0.3s ease",
-  },
-  swappedCard: {
-    width: "30vh",
-    height: "50vh",
-    backgroundColor: "#0d1b2a",
-    color: "white",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    transition: "all 0.3s ease",
-  },
-  title: {
-    marginBottom: "15px",
-    fontWeight: "bold",
-  },
-  keypad: {
-    marginTop: "20px",
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "20px",
-  },
-  keyButton: {
-    width: "100%",
-    backgroundColor: "#415a77",
-    "&:hover": { backgroundColor: "#1b263b" },
-  },
-  deleteButton: {
-    width: "100%",
-    backgroundColor: "#B42828",
-    "&:hover": { backgroundColor: "#FF0000" },
-  },
-  verifyButton: {
-    width: "50%",
-    marginTop: "20px",
-    backgroundColor: "#415a77",
-  },
-  actionButton: {
-    width: "100%",
-    backgroundColor: "#415a77",
-    "&:hover": { backgroundColor: "#1b263b" },
-  },
-  swapButton: {
-    width: "80%",
-    color: "white",
-    borderColor: "white",
-    "&:hover": { backgroundColor: "#1b263b" },
-  },
+    wrapper: {
+        backgroundColor: "#1b263b",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    confirmCard: {
+        width: "50vh",
+        height: "60vh",
+        backgroundColor: "#e0e1dd",
+        color: "black",
+        borderRadius: "25px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        textAlign: "center",
+    },
+    registerCard: {
+        width: "auto",
+        height: "auto",
+        backgroundColor: "#e0e1dd",
+        color: "black",
+        borderRadius: "25px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        textAlign: "center",
+    },
+    activeCard: {
+        width: "65vh",
+        height: "50vh",
+        backgroundColor: "#e0e1dd",
+        color: "black",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        transition: "all 0.3s ease",
+    },
+    swappedCard: {
+        width: "30vh",
+        height: "50vh",
+        backgroundColor: "#0d1b2a",
+        color: "white",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        transition: "all 0.3s ease",
+    },
+    title: {
+        marginBottom: "15px",
+        fontWeight: "bold",
+    },
+    keypad: {
+        marginTop: "20px",
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: "20px",
+    },
+    keyButton: {
+        width: "100%",
+        backgroundColor: "#415a77",
+        "&:hover": { backgroundColor: "#1b263b" },
+    },
+    deleteButton: {
+        width: "100%",
+        backgroundColor: "#B42828",
+        "&:hover": { backgroundColor: "#FF0000" },
+    },
+    verifyButton: {
+        width: "50%",
+        marginTop: "20px",
+        backgroundColor: "#415a77",
+    },
+    actionButton: {
+        width: "100%",
+        backgroundColor: "#415a77",
+        "&:hover": { backgroundColor: "#1b263b" },
+    },
+    swapButton: {
+        width: "80%",
+        color: "white",
+        borderColor: "white",
+        "&:hover": { backgroundColor: "#1b263b" },
+    },
 };
 
 export default Auth;
