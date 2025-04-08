@@ -1,25 +1,25 @@
 import { Card, TextField, Button, Typography } from "@mui/material";
-import React, { useContext, useState, useEffect} from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import ForgotPassw from "../components/ForgotPassw";
 
 function Auth() {
-  const { login, register, verifyData, verifyEmail, verifyTotp } = useContext(AuthContext);  const [isSwapped, setIsSwapped] = useState(false);
+  const { login, register, verifyData, verifyEmail, verifyTotp } = useContext(AuthContext);
+  const [isSwapped, setIsSwapped] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isConfirmingEmail, setIsConfirmingEmail] = useState(false);
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
-  // const { isAuthenticated} = useContext(AuthContext)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [qrCodeURL, setQrCodeURL] = useState("");
   const [totpSecretKey, settotpSecretKey] = useState("");
   const [dob, setDob] = useState("");
-
-
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   const navigate = useNavigate();
   const handleSwap = () => {
@@ -29,14 +29,14 @@ function Auth() {
   useEffect(() => {
     return () => {
       // Cleanup sensitive state on unmount
-      setEmail("")
-      setPassword("")
-      setFirstName("")
-      setUsername("")
-      setLastName("")
-      setVerificationCode(["", "", "", "", "", ""])
-      setQrCodeURL("")
-      settotpSecretKey("")
+      setEmail("");
+      setPassword("");
+      setFirstName("");
+      setUsername("");
+      setLastName("");
+      setVerificationCode(["", "", "", "", "", ""]);
+      setQrCodeURL("");
+      settotpSecretKey("");
     };
   }, []);
 
@@ -70,38 +70,6 @@ function Auth() {
     }
   };
 
-  // const handleUserRegistering = async () => {
-  //   if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-  //     alert("All fields are required.");
-  //     return;
-  //   }
-  //   if (!isValidEmail(email)) {
-  //     alert("Please enter a valid email address.");
-  //     return;
-  //   }
-  //   try {
-  //     const [message, instructions, qrCodeURL, totp_uri] = await register(
-  //       email,
-  //       username,
-  //       password,
-  //       firstName,
-  //       lastName,
-  //       dob
-  //     );
-  
-  //     console.log("Message:", message);
-  //     console.log("Instructions:", instructions);
-  //     console.log("QR Code:", qrCodeURL);
-  //     console.log("TOTP URI:", totp_uri);
-  
-  //     setQrCodeURL(qrCodeURL);
-  //     settotpSecretKey(totp_uri);
-  //     setIsRegistering(true);
-  //   } catch (error) {
-  //     alert(error?.error || "Registration failed");
-  //   }
-  // };
-
   const handleIsConfirming = () => {
     setIsConfirming(true);
   };
@@ -113,8 +81,7 @@ function Auth() {
     }
     try {
       await login(email, password);
-      setIsConfirming(true)
-      
+      setIsConfirming(true);
     } catch (err) {
       alert(err.error || "Login failed");
     }
@@ -127,8 +94,6 @@ function Auth() {
       setVerificationCode(newCode);
     }
   };
-
-  // const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleVirtualKeyPress = (value) => {
     const emptyIndex = verificationCode.findIndex((digit) => digit === "");
@@ -152,7 +117,12 @@ function Auth() {
       alert(error.message);
     }
   };
-  
+
+  const handleForgotPassword = () => {
+    setIsForgotPassword(true);
+  };
+
+
   const handleRegisterConfirmSignUp = async () => {
     try {
       const otp = verificationCode.join("");
@@ -180,14 +150,19 @@ function Auth() {
       handleLogin();
     }
   };
-  if (isConfirmingEmail){
+
+  if (isForgotPassword) {
+    return <ForgotPassw />;
+  }
+
+  if (isConfirmingEmail) {
     return (
-    <div style={styles.wrapper}>
+      <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
+          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+        </div>
         <Card sx={styles.confirmCard}>
-        <Typography variant="h4" sx={styles.title}>
+          <Typography variant="h4" sx={styles.title}>
             Email Verification
           </Typography>
           <Typography variant="h5" sx={styles.title}>
@@ -222,7 +197,7 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button variant="contained" onClick={ handleEmailVerification} sx={styles.verifyButton}>
+          <Button variant="contained" onClick={handleEmailVerification} sx={styles.verifyButton}>
             Verify
           </Button>
         </Card>
@@ -233,10 +208,10 @@ function Auth() {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
+          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+        </div>
         <Card sx={styles.confirmCard}>
-        <Typography variant="h4" sx={styles.title}>
+          <Typography variant="h4" sx={styles.title}>
             2 Factor Authentication
           </Typography>
           <Typography variant="h5" sx={styles.title}>
@@ -271,7 +246,11 @@ function Auth() {
               Delete
             </Button>
           </div>
-          <Button variant="contained" onClick={ isRegistering? handleRegisterConfirmSignUp: handleLoginConfirmSignUp} sx={styles.verifyButton}>
+          <Button
+            variant="contained"
+            onClick={isRegistering ? handleRegisterConfirmSignUp : handleLoginConfirmSignUp}
+            sx={styles.verifyButton}
+          >
             Verify
           </Button>
         </Card>
@@ -283,8 +262,8 @@ function Auth() {
     return (
       <div style={styles.wrapper}>
         <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
+          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+        </div>
         <Card sx={styles.registerCard}>
           <Typography variant="h5" sx={styles.title}>
             Scan QR Code to Sign Up with Google
@@ -298,7 +277,7 @@ function Auth() {
             Use an Authenticator App to scan the QR code and then click NEXT.
           </Typography>
           <Typography variant="body2" sx={{ paddingBottom: "10px" }}>
-            OR  Paste this secret key in your Authenticator App and then click NEXT.
+            OR Paste this secret key in your Authenticator App and then click NEXT.
           </Typography>
           {totpSecretKey && (
             <>
@@ -313,7 +292,7 @@ function Auth() {
                   maxWidth: "90%",
                   paddingBottom: "10px",
                   fontSize: "0.75rem",
-                  color: "#333"
+                  color: "#333",
                 }}
               >
                 {totpSecretKey}
@@ -327,7 +306,6 @@ function Auth() {
       </div>
     );
   }
-  
 
   return (
     <div style={styles.wrapper}>
@@ -362,6 +340,7 @@ function Auth() {
               <Button variant="contained" sx={styles.actionButton} onClick={handleLogin}>
                 Log In
               </Button>
+              <Button variant="text" onClick={handleForgotPassword}>Forgot password?</Button>
             </>
           ) : (
             <>
