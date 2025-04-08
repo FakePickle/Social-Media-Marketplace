@@ -163,7 +163,7 @@ function Auth() {
         try {
             const otp = verificationCode.join("");
             await verify2FA(otp, email);
-            navigate("/");
+            navigate("/home");
         } catch (error) {
             alert(error.message);
         }
@@ -189,7 +189,7 @@ function Auth() {
             settotpSecretKey("");
             
             // Redirect to home page after successful registration and 2FA verification
-            navigate("/");
+            navigate("/home");
         } catch (error) {
             alert(error.message);
         }

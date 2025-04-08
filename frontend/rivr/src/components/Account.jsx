@@ -27,7 +27,7 @@ function Account({ anchorEl, handleClose }) {
           borderRadius: "10px",
           padding: "15px",
           minWidth: "400px",
-          height: "600px",
+          height: "auto",
         },
       }}
     >
@@ -52,12 +52,16 @@ function Account({ anchorEl, handleClose }) {
         <strong>Username:</strong> admin
       </Typography>
 
-      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "20px" }}>
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "10px" }}>
         <strong>Bio:</strong> This is a public bio. You can update it in your profile settings.
       </Typography>
 
-      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "20px" }}>
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "10px" }}>
         <strong>Role:</strong> User
+      </Typography>
+
+      <Typography variant="body1" sx={{ color: "#ccd6f6", marginBottom: "20px" }}>
+        <strong>Address:</strong> 123 Main Street, City, Country
       </Typography>
 
       <Button

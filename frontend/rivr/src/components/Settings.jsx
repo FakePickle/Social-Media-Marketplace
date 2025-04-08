@@ -1,21 +1,40 @@
 import React, { useState } from "react";
-import { TextField, Button, Typography } from "@mui/material";
+import { TextField, Button, Typography, Avatar, Paper, Divider } from "@mui/material";
 
 function Settings() {
-  const [username, setUsername] = useState("admin"); // Default username
-  const [profilePicture, setProfilePicture] = useState("https://via.placeholder.com/100"); // Default profile picture
-  const [bio, setBio] = useState("This is a public bio."); // Default bio
+  const [username, setUsername] = useState("admin");
+  const [profilePicture, setProfilePicture] = useState("https://via.placeholder.com/100");
+  const [bio, setBio] = useState("This is a public bio.");
+  const [address, setAddress] = useState("123 Main Street, City, Country");
 
   const handleSave = () => {
     alert("Account details updated successfully!");
-    console.log("Updated Details:", { username, profilePicture, bio });
+    console.log("Updated Details:", { username, profilePicture, bio, address });
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto", backgroundColor: "#1B263B", borderRadius: "10px", color: "#E0E1DD" }}>
-      <Typography variant="h4" style={{ marginBottom: "20px", color: "#E0E1DD" }}>
+    <Paper
+      elevation={4}
+      sx={{
+        padding: "30px",
+        maxWidth: "700px",
+        margin: "40px auto",
+        backgroundColor: "#0D1B2A",
+        borderRadius: "16px",
+        color: "#E0E1DD",
+      }}
+    >
+      <Typography variant="h4" gutterBottom sx={{ color: "#E0E1DD", fontWeight: "bold" }}>
         Edit Account Details
       </Typography>
+
+      <Divider sx={{ backgroundColor: "#E0E1DD", marginBottom: "30px" }} />
+
+      {/* Profile Preview */}
+      <div style={{ display: "flex", alignItems: "center", marginBottom: "25px" }}>
+        <Avatar src={profilePicture} alt="Profile" sx={{ width: 80, height: 80, marginRight: 2 }} />
+        <Typography variant="subtitle1">Preview</Typography>
+      </div>
 
       {/* Username Field */}
       <TextField
@@ -24,10 +43,10 @@ function Settings() {
         fullWidth
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        style={{ marginBottom: "20px" }}
+        sx={{ marginBottom: "20px" }}
         InputLabelProps={{ style: { color: "#E0E1DD" } }}
         InputProps={{
-          style: { color: "#E0E1DD", borderColor: "#778DA9" },
+          style: { color: "#E0E1DD" },
         }}
       />
 
@@ -38,10 +57,10 @@ function Settings() {
         fullWidth
         value={profilePicture}
         onChange={(e) => setProfilePicture(e.target.value)}
-        style={{ marginBottom: "20px" }}
+        sx={{ marginBottom: "20px" }}
         InputLabelProps={{ style: { color: "#E0E1DD" } }}
         InputProps={{
-          style: { color: "#E0E1DD", borderColor: "#778DA9" },
+          style: { color: "#E0E1DD" },
         }}
       />
 
@@ -54,23 +73,49 @@ function Settings() {
         rows={4}
         value={bio}
         onChange={(e) => setBio(e.target.value)}
-        style={{ marginBottom: "20px" }}
+        sx={{ marginBottom: "20px" }}
         InputLabelProps={{ style: { color: "#E0E1DD" } }}
         InputProps={{
-          style: { color: "#E0E1DD", borderColor: "#778DA9" },
+          style: { color: "#E0E1DD" },
+        }}
+      />
+
+      {/* Address Field */}
+      <TextField
+        label="Address"
+        variant="outlined"
+        fullWidth
+        multiline
+        rows={2}
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        sx={{ marginBottom: "30px" }}
+        InputLabelProps={{ style: { color: "#E0E1DD" } }}
+        InputProps={{
+          style: { color: "#E0E1DD" },
         }}
       />
 
       {/* Save Button */}
       <Button
         variant="contained"
-        color="primary"
         onClick={handleSave}
-        style={{ backgroundColor: "#778DA9", color: "#1B263B" }}
+        fullWidth
+        sx={{
+          backgroundColor: "#778DA9",
+          color: "#1B263B",
+          fontWeight: "bold",
+          padding: "12px",
+          borderRadius: "12px",
+          textTransform: "none",
+          '&:hover': {
+            backgroundColor: "#90A4B9",
+          },
+        }}
       >
         Save Changes
       </Button>
-    </div>
+    </Paper>
   );
 }
 
