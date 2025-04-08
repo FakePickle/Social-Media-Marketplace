@@ -19,7 +19,7 @@ from .views import (
     VerifyPasswordResetView,
     ResetPasswordView,
     UserProfileView,
-    ListUserView
+    ListUserView,
 )
 
 urlpatterns = [
@@ -49,6 +49,11 @@ urlpatterns = [
     path("messages/<int:pk>/", MessageView.as_view(), name="message-detail"),
     path("groups/", GroupCreateView.as_view(), name="create-group"),
     path("groups/<int:pk>/", GroupDetailView.as_view(), name="group-detail"),
+    path(
+        "friendships/<str:username>/",
+        FriendshipView.as_view(),
+        name="friendship-detail",
+    ),
     path("friendships/", FriendshipView.as_view(), name="friendship-list-create"),
     path("friendships/accept/", FriendshipView.as_view(), name="friendship-accept"),
     path("friendships/delete/", FriendshipView.as_view(), name="friendship-delete"),

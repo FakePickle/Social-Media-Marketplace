@@ -244,11 +244,11 @@ class FriendshipView(APIView):
     serializer_class = FriendshipSerializer
     permission_classes = [AllowAny]
 
-    def get(self, request):
+    def get(self, username):
         """
         Get all friendships that are not accepted yet.
         """
-        user = request.data.get("user")
+        user = self.request.query_params.get("username")
         if not user:
             return Response(
                 {"error": "User is required."}, status=status.HTTP_400_BAD_REQUEST
@@ -712,7 +712,9 @@ class VerifyTOTPView(APIView):
                         "is_verified": user.is_verified,
                         "is_admin": user.is_staff,
                         "date_joined": user.date_joined,
-                        "profile_picture": user.profile_picture.url if user.profile_picture else None
+                        "profile_picture": (
+                            user.profile_picture.url if user.profile_picture else None
+                        ),
                     },
                 },
                 status=status.HTTP_200_OK,
