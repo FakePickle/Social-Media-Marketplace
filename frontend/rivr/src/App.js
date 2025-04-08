@@ -11,22 +11,40 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
 } from "react-router-dom";
 
 import { useContext } from "react";
 import { AuthContext } from "./contexts/AuthContext";
 
 function App() {
-  const { isAuthenticated} = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
 
   return (
-
     <Router>
       <Routes>
-        <Route path="/auth" element={<Auth />}/>
-        <Route path="/home" element={<ProtectedRoute>
-          <Home />
-        </ProtectedRoute>}/>
+        <Route path="/auth" element={<Auth />} />
+
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Catch-all route */}
+        <Route
+          path="*"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/home" />
+            ) : (
+              <Navigate to="/auth" />
+            )
+          }
+        />
       </Routes>
     </Router>
   );
