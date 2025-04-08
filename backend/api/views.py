@@ -21,7 +21,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
 from rest_framework.exceptions import PermissionDenied
 
 from .models import (
@@ -111,7 +111,7 @@ class RegisterView(APIView):
                 return Response(
                     {"error": f"Failed to generate verification code: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -376,7 +376,7 @@ class MessageView(APIView):
 
             # Check sender permission
             if not group_obj.members.filter(username=sender_username).exists():
-                return Response(
+                    return Response(
                     {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -466,7 +466,7 @@ class MessageView(APIView):
             {
                 "error": "Invalid request: sender and group or sender and receiver required."
             },
-            status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST,
         )
 
 
@@ -716,3 +716,152 @@ class VerifyTOTPView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class RequestPasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = CustomUser.objects.get(email=email)
+            # Generate a secure random code
+            code = "".join([str(random.randint(0, 9)) for _ in range(6)])
+
+            # Create or update verification record with 15 min expiry
+            expires_at = timezone.now() + timedelta(minutes=15)
+
+            verification, created = VerificationCode.objects.update_or_create(
+                email=email,
+                defaults={
+                    "code": code,
+                    "data": {},  # Empty JSON object for password reset
+                    "expires_at": expires_at,
+                },
+            )
+
+            # Send verification email
+            send_mail(
+                subject="Password Reset Request - Rivr",
+                message=f"Your password reset code is: {code}\nThis code will expire in 15 minutes.",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+
+            return Response(
+                {
+                    "message": "Password reset code sent to your email",
+                    "email": email,
+                    "verify-endpoint": "/api/verify-password-reset/",
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "No user found with this email"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to process request: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class VerifyPasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        code = request.data.get('code')
+        email = request.data.get('email')
+
+        if not code or not email:
+            return Response(
+                {"error": "Code and email are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            verification = VerificationCode.objects.get(email=email)
+
+            if verification.is_expired():
+                verification.delete()
+                return Response(
+                    {"error": "Reset code has expired. Please request a new one."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if code != verification.code:
+                return Response(
+                    {"error": "Invalid reset code"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Generate a temporary token for the reset process
+            token = RefreshToken.for_user(CustomUser.objects.get(email=email))
+
+            return Response(
+                {
+                    "message": "Reset code verified successfully",
+                    "reset_token": str(token.access_token),
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except VerificationCode.DoesNotExist:
+            return Response(
+                {"error": "No reset request found for this email"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to verify code: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get('reset_token')
+        new_password = request.data.get('new_password')
+
+        if not token or not new_password:
+            return Response(
+                {"error": "Reset token and new password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Verify the token
+            token = AccessToken(token)
+            user = CustomUser.objects.get(id=token['user_id'])
+
+            # Update password
+            user.set_password(new_password)
+            user.save()
+
+            # Delete any existing verification codes for this email
+            VerificationCode.objects.filter(email=user.email).delete()
+
+            return Response(
+                {"message": "Password reset successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except TokenError:
+            return Response(
+                {"error": "Invalid or expired reset token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to reset password: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

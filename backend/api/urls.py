@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 from .views import (AvailableMarketPlaceListView, LoginView, MarketPlaceDetailView, MarketPlaceListCreateView, RegisterView,
                     MessageView, GroupCreateView, GroupDetailView,
                     FriendshipView, CombinedChatGroupView, UserMarketPlaceListView, VerifyEmailView, VerifyTOTPView,
+                    RequestPasswordResetView, VerifyPasswordResetView, ResetPasswordView,
                     )
 
 urlpatterns = [
@@ -13,6 +14,10 @@ urlpatterns = [
     path("verify-2fa/", VerifyTOTPView.as_view(), name="verify-2fa"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
+    # Password reset endpoints
+    path("request-password-reset/", RequestPasswordResetView.as_view(), name="request-password-reset"),
+    path("verify-password-reset/", VerifyPasswordResetView.as_view(), name="verify-password-reset"),
+    path("reset-password/", ResetPasswordView.as_view(), name="reset-password"),
     # path("users/", UserView.as_view(), name="user-list"),
     path("messages/", MessageView.as_view(), name="messages"),
     path("messages/<int:pk>/", MessageView.as_view(), name="message-detail"),
