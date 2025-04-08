@@ -1,121 +1,217 @@
-import React, { useState } from "react";
-import { TextField, Button, Typography, Avatar, Paper, Divider } from "@mui/material";
+import React, { useContext, useState, useEffect } from "react";
+import { Box, TextField, Button, Typography, Avatar } from "@mui/material";
+import { AuthContext } from "../contexts/AuthContext";
+import api from "../utils/api";
 
 function Settings() {
-  const [username, setUsername] = useState("admin");
-  const [profilePicture, setProfilePicture] = useState("https://via.placeholder.com/100");
-  const [bio, setBio] = useState("This is a public bio.");
-  const [address, setAddress] = useState("123 Main Street, City, Country");
+  const { userData, setUserData } = useContext(AuthContext);
+  const [formData, setFormData] = useState({
+    username: userData?.username || "",
+    bio: userData?.bio || "",
+    address: userData?.address || "",
+  });
+  const [profilePicture, setProfilePicture] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(userData?.profile_picture_url || null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  const handleSave = () => {
-    alert("Account details updated successfully!");
-    console.log("Updated Details:", { username, profilePicture, bio, address });
+  useEffect(() => {
+    console.log("Current userData:", userData);
+  }, [userData]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setProfilePicture(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log("Form submitted");
+    console.log("Form data:", formData);
+    console.log("Profile picture:", profilePicture);
+    
+    setIsLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("username", formData.username);
+      formDataToSend.append("bio", formData.bio);
+      formDataToSend.append("address", formData.address);
+      if (profilePicture) {
+        formDataToSend.append("profile_picture", profilePicture);
+      }
+
+      const response = await api.put("user/profile/", formDataToSend, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.status === 200) {
+        console.log("Profile update response:", response.data);
+        setUserData(response.data);
+        setSuccess(true);
+        setProfilePicture(null);
+        setError(null); // Clear any existing errors
+      }
+    } catch (err) {
+      console.error("Profile update error:", err);
+      console.error("Error response:", err.response?.data);
+      
+      // Handle specific error cases
+      if (err.response?.data?.username) {
+        setError(`Username error: ${err.response.data.username[0]}`);
+      } else if (err.response?.data?.profile_picture) {
+        setError(`Profile picture error: ${err.response.data.profile_picture[0]}`);
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Failed to update profile. Please try again.");
+      }
+      setSuccess(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <Paper
-      elevation={4}
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
       sx={{
-        padding: "30px",
-        maxWidth: "700px",
-        margin: "40px auto",
-        backgroundColor: "#0D1B2A",
-        borderRadius: "16px",
-        color: "#E0E1DD",
+        maxWidth: 600,
+        mx: "auto",
+        p: 3,
+        backgroundColor: "#415A77",
+        borderRadius: 2,
+        color: "#ffffff",
       }}
     >
-      <Typography variant="h4" gutterBottom sx={{ color: "#E0E1DD", fontWeight: "bold" }}>
-        Edit Account Details
+      <Typography variant="h5" sx={{ mb: 3, color: "#ffffff" }}>
+        Profile Settings
       </Typography>
 
-      <Divider sx={{ backgroundColor: "#E0E1DD", marginBottom: "30px" }} />
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 3 }}>
+        <Avatar
+          src={previewUrl || userData?.profile_picture_url}
+          sx={{ width: 100, height: 100, mb: 2 }}
+        />
+        <Button
+          variant="contained"
+          component="label"
+          sx={{ backgroundColor: "#e63946", "&:hover": { backgroundColor: "#d62828" } }}
+        >
+          Change Profile Picture
+          <input
+            type="file"
+            hidden
+            accept="image/*"
+            onChange={handleFileChange}
+          />
+        </Button>
+      </Box>
 
-      {/* Profile Preview */}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: "25px" }}>
-        <Avatar src={profilePicture} alt="Profile" sx={{ width: 80, height: 80, marginRight: 2 }} />
-        <Typography variant="subtitle1">Preview</Typography>
-      </div>
-
-      {/* Username Field */}
       <TextField
+        fullWidth
         label="Username"
-        variant="outlined"
-        fullWidth
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        sx={{ marginBottom: "20px" }}
-        InputLabelProps={{ style: { color: "#E0E1DD" } }}
-        InputProps={{
-          style: { color: "#E0E1DD" },
+        name="username"
+        value={formData.username}
+        onChange={handleInputChange}
+        margin="normal"
+        sx={{
+          "& .MuiOutlinedInput-root": {
+            "& fieldset": { borderColor: "#ccd6f6" },
+            "&:hover fieldset": { borderColor: "#ffffff" },
+          },
+          "& .MuiInputLabel-root": { color: "#ccd6f6" },
+          "& .MuiInputBase-input": { color: "#ffffff" },
         }}
       />
 
-      {/* Profile Picture Field */}
       <TextField
-        label="Profile Picture URL"
-        variant="outlined"
         fullWidth
-        value={profilePicture}
-        onChange={(e) => setProfilePicture(e.target.value)}
-        sx={{ marginBottom: "20px" }}
-        InputLabelProps={{ style: { color: "#E0E1DD" } }}
-        InputProps={{
-          style: { color: "#E0E1DD" },
-        }}
-      />
-
-      {/* Bio Field */}
-      <TextField
-        label="Public Bio"
-        variant="outlined"
-        fullWidth
+        label="Bio"
+        name="bio"
+        value={formData.bio}
+        onChange={handleInputChange}
+        margin="normal"
         multiline
         rows={4}
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        sx={{ marginBottom: "20px" }}
-        InputLabelProps={{ style: { color: "#E0E1DD" } }}
-        InputProps={{
-          style: { color: "#E0E1DD" },
+        sx={{
+          "& .MuiOutlinedInput-root": {
+            "& fieldset": { borderColor: "#ccd6f6" },
+            "&:hover fieldset": { borderColor: "#ffffff" },
+          },
+          "& .MuiInputLabel-root": { color: "#ccd6f6" },
+          "& .MuiInputBase-input": { color: "#ffffff" },
         }}
       />
 
-      {/* Address Field */}
       <TextField
-        label="Address"
-        variant="outlined"
         fullWidth
+        label="Address"
+        name="address"
+        value={formData.address}
+        onChange={handleInputChange}
+        margin="normal"
         multiline
         rows={2}
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        sx={{ marginBottom: "30px" }}
-        InputLabelProps={{ style: { color: "#E0E1DD" } }}
-        InputProps={{
-          style: { color: "#E0E1DD" },
+        sx={{
+          "& .MuiOutlinedInput-root": {
+            "& fieldset": { borderColor: "#ccd6f6" },
+            "&:hover fieldset": { borderColor: "#ffffff" },
+          },
+          "& .MuiInputLabel-root": { color: "#ccd6f6" },
+          "& .MuiInputBase-input": { color: "#ffffff" },
         }}
       />
 
-      {/* Save Button */}
+      {error && (
+        <Typography color="error" sx={{ mt: 2 }}>
+          {error}
+        </Typography>
+      )}
+
+      {success && (
+        <Typography color="success" sx={{ mt: 2 }}>
+          Profile updated successfully!
+        </Typography>
+      )}
+
       <Button
+        type="submit"
         variant="contained"
-        onClick={handleSave}
         fullWidth
         sx={{
-          backgroundColor: "#778DA9",
-          color: "#1B263B",
-          fontWeight: "bold",
-          padding: "12px",
-          borderRadius: "12px",
-          textTransform: "none",
-          '&:hover': {
-            backgroundColor: "#90A4B9",
-          },
+          mt: 3,
+          backgroundColor: "#e63946",
+          "&:hover": { backgroundColor: "#d62828" },
         }}
+        disabled={isLoading}
       >
-        Save Changes
+        {isLoading ? "Saving..." : "Save Changes"}
       </Button>
-    </Paper>
+    </Box>
   );
 }
 
