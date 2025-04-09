@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import TopNav from "../components/TopNav";
 import Sidebar from "../components/Sidebar";
-import Chats from "../components/Chats";
 import Search from "../components/Search";
 import Marketplace from "../components/Marketplace";
 import Settings from "../components/Settings";

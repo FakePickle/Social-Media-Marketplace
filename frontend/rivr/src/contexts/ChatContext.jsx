@@ -12,16 +12,22 @@ export const ChatProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch all chats (DMs and groups) using /api/allChats/
+  // Helper to get the other user in a DM
+  const getOtherUser = (chat) => {
+    if (chat.type === 'group') return chat.name;
+    return chat.user1 === userData?.username ? chat.user2 : chat.user1;
+  };
+
+  // Fetch all chats (DMs and groups)
   const fetchChats = async () => {
     if (!userData?.username) return;
     try {
       setLoading(true);
-      const response = await api.get('allChats/');
-      setChats(response.data || []); // Expect [{ id, type: 'dm'|'group', user1, user2, name, last_message }, ...]
+      const response = await api.get('/allChats/');
+      setChats(response.data.results || []); // CombinedChatGroupView returns {results: [...]}
       setError(null);
     } catch (err) {
-      console.error('Error fetching chats:', err);
+      console.error('Error fetching chats:', err.response?.data || err.message);
       setError('Failed to load chats');
     } finally {
       setLoading(false);
@@ -32,13 +38,20 @@ export const ChatProvider = ({ children }) => {
   const fetchMessages = async (chatId, isGroup = false) => {
     try {
       setLoading(true);
-      const url = isGroup ? `groups/${chatId}/` : 'messages/';
-      const params = isGroup ? {} : { sender: userData?.username, receiver: chatId };
-      const response = await api.get(url, { params });
-      setMessages(response.data || []); // Expect [{ id, sender, content, timestamp }, ...]
+      if (isGroup) {
+        const response = await api.get(`/messages/${chatId}/`); // Group messages
+        setMessages(response.data || []);
+      } else {
+        const otherUser = getOtherUser({ id: chatId, type: 'chat' });
+        console.log('Fetching messages for:', otherUser);
+        const response = await api.get('/messages/', {
+          params: { receiver: otherUser },
+        });
+        setMessages(response.data || []);
+      }
       setError(null);
     } catch (err) {
-      console.error('Error fetching messages:', err);
+      console.error('Error fetching messages:', err.response?.data || err.message);
       setError('Failed to load messages');
     } finally {
       setLoading(false);
@@ -53,7 +66,7 @@ export const ChatProvider = ({ children }) => {
         content,
         ...(isGroup ? { group: receiverId } : { receiver: receiverId }),
       };
-      const response = await api.post('messages/', messageData);
+      const response = await api.post('/messages/', messageData);
       const newMessage = response.data;
 
       // Update messages list
@@ -68,17 +81,16 @@ export const ChatProvider = ({ children }) => {
         if (chatIndex !== -1) {
           updatedChats[chatIndex] = {
             ...updatedChats[chatIndex],
-            last_message: content,
+            last_message: newMessage.decrypted_content || newMessage.content,
             last_message_timestamp: newMessage.timestamp,
           };
-        } else {
-          // Add new DM chat if it doesn’t exist
+        } else if (!isGroup) {
           updatedChats.push({
-            id: receiverId, // Temporary ID; backend should return chat ID
-            type: 'dm',
+            id: `${userData?.username}-${receiverId}`, // Match CombinedChatGroupView format
+            type: 'chat',
             user1: userData?.username,
             user2: receiverId,
-            last_message: content,
+            last_message: newMessage.decrypted_content || newMessage.content,
             last_message_timestamp: newMessage.timestamp,
           });
         }
@@ -87,20 +99,19 @@ export const ChatProvider = ({ children }) => {
 
       return newMessage;
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error('Error sending message:', err.response?.data || err.message);
       throw new Error('Failed to send message');
     }
   };
 
-  // Create a new chat (DM) by sending a message
+  // Create a new DM chat by sending a message
   const createChat = async (otherUsername) => {
     try {
-      // Send an initial message to create the chat
       const response = await sendMessage('Hello!', otherUsername, false);
-      fetchChats(); // Refresh chat list
+      await fetchChats(); // Refresh chat list from /allChats/
       return response;
     } catch (err) {
-      console.error('Error creating chat:', err);
+      console.error('Error creating chat:', err.response?.data || err.message);
       throw new Error('Failed to create chat');
     }
   };
@@ -108,7 +119,7 @@ export const ChatProvider = ({ children }) => {
   // Create a new group
   const createGroup = async (name, description, members) => {
     try {
-      const response = await api.post('groups/', {
+      const response = await api.post('/groups/', {
         name,
         description,
         members: [userData?.username, ...members],
@@ -116,7 +127,7 @@ export const ChatProvider = ({ children }) => {
       setChats((prev) => [...prev, { ...response.data, type: 'group' }]);
       return response.data;
     } catch (err) {
-      console.error('Error creating group:', err);
+      console.error('Error creating group:', err.response?.data || err.message);
       throw new Error('Failed to create group');
     }
   };
@@ -137,12 +148,6 @@ export const ChatProvider = ({ children }) => {
       );
     }
   }, [activeChat]);
-
-  // Helper to get the other user in a DM
-  const getOtherUser = (chat) => {
-    if (chat.type === 'group') return chat.name;
-    return chat.user1 === userData?.username ? chat.user2 : chat.user1;
-  };
 
   return (
     <ChatContext.Provider

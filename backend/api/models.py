@@ -100,7 +100,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             self.private_key = private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
+                encryption_algorithm=serialization.BestAvailableEncryption(
+                    password=config("RSA_PASSPHRASE").encode()
+                ),
             ).decode("utf-8")
 
             self.public_key = public_key.public_bytes(
@@ -161,84 +163,102 @@ class Chat(models.Model):
         return chat
 
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from decouple import config
+from django.db import models
+
+
 class Message(models.Model):
     chat = models.ForeignKey(
-        Chat, on_delete=models.CASCADE, related_name="messages", null=True, blank=True
+        "Chat", on_delete=models.CASCADE, related_name="messages", null=True, blank=True
     )
-
     sender = models.ForeignKey(
-        CustomUser, on_delete=models.CASCADE, related_name="sent_messages"
+        "CustomUser", on_delete=models.CASCADE, related_name="sent_messages"
     )
     receiver = models.ForeignKey(
-        CustomUser, on_delete=models.CASCADE, related_name="received_messages"
+        "CustomUser", on_delete=models.CASCADE, related_name="received_messages"
     )
-    content = models.TextField()
+    content = models.TextField()  # Stores encrypted content as a stringified dict
     timestamp = models.DateTimeField(auto_now_add=True)
 
     @staticmethod
     def encrypt_message(plain_text, sender, receiver):
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from decouple import config
+        """Encrypt a message using the receiver's public key and sign it with the sender's private key."""
+        try:
+            # Load sender's encrypted private key (for signing)
+            private_key = serialization.load_pem_private_key(
+                sender.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
+            )
+        except ValueError as e:
+            raise ValueError(f"Failed to load sender's private key: {str(e)}")
 
-        # Load sender's private key (for signing)
-        private_key = serialization.load_pem_private_key(
-            sender.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
+        try:
+            # Load receiver's public key (for encryption)
+            public_key = serialization.load_pem_public_key(receiver.public_key.encode())
+        except ValueError as e:
+            raise ValueError(f"Failed to load receiver's public key: {str(e)}")
+
+        # Encrypt the plaintext with receiver's public key
+        ciphertext = public_key.encrypt(
+            plain_text.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
         )
 
-        # Sign the message
+        # Sign the plaintext with sender's private key
         signature = private_key.sign(
             plain_text.encode(),
             padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
+                mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
             ),
             hashes.SHA256(),
         )
 
-        # Load receiver's public key (for encryption)
-        public_key = serialization.load_pem_public_key(receiver.public_key.encode())
-
-        # Encrypt the plaintext
-        ciphertext = public_key.encrypt(
-            plain_text.encode(),
-            padding.OAEP(
-                mgf=padding.MGF1(hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None,
-            ),
-        )
-
-        # Return both encrypted message and signature (you can encode with base64 or hex)
+        # Return encrypted content and signature as a dict
         return {"ciphertext": ciphertext.hex(), "signature": signature.hex()}
 
     @staticmethod
     def decrypt_message(ciphertext_hex, signature_hex, sender, receiver):
-        from cryptography.exceptions import InvalidSignature
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from decouple import config
+        """Decrypt a message using the receiver's private key and verify with the sender's public key."""
+        try:
+            # Convert hex strings to bytes
+            ciphertext = bytes.fromhex(ciphertext_hex)
+            signature = bytes.fromhex(signature_hex)
+        except ValueError as e:
+            raise ValueError(f"Invalid hex data: {str(e)}")
 
-        ciphertext = bytes.fromhex(ciphertext_hex)
-        signature = bytes.fromhex(signature_hex)
+        try:
+            # Load receiver's encrypted private key (to decrypt)
+            private_key = serialization.load_pem_private_key(
+                receiver.private_key.encode(),
+                password=config("RSA_PASSPHRASE").encode(),
+            )
+        except ValueError as e:
+            raise ValueError(f"Failed to load receiver's private key: {str(e)}")
 
-        # Load receiver's private key (to decrypt message)
-        private_key = serialization.load_pem_private_key(
-            receiver.private_key.encode(), password=config("RSA_PASSPHRASE").encode()
-        )
+        try:
+            # Load sender's public key (to verify signature)
+            public_key = serialization.load_pem_public_key(sender.public_key.encode())
+        except ValueError as e:
+            raise ValueError(f"Failed to load sender's public key: {str(e)}")
 
         # Decrypt the message
-        plain_text = private_key.decrypt(
-            ciphertext,
-            padding.OAEP(
-                mgf=padding.MGF1(hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None,
-            ),
-        )
-
-        # Load sender's public key (to verify signature)
-        public_key = serialization.load_pem_public_key(sender.public_key.encode())
+        try:
+            plain_text = private_key.decrypt(
+                ciphertext,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                ),
+            )
+        except ValueError as e:
+            raise ValueError(f"Decryption failed: {str(e)}")
 
         # Verify the signature
         try:
@@ -256,12 +276,16 @@ class Message(models.Model):
             raise ValueError("Signature verification failed!")
 
     def save(self, *args, **kwargs):
+        """Ensure chat is set before saving."""
         if not self.chat:
             self.chat = Chat.get_or_create_chat(self.sender, self.receiver)
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Message from {self.sender} to {self.receiver} at {self.timestamp}"
+
+    class Meta:
+        ordering = ["timestamp"]  # Ensure messages are ordered by time
 
 
 class Group(models.Model):

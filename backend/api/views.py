@@ -368,7 +368,7 @@ class MessageView(APIView):
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
                 message_data = GroupMessageSerializer(msg).data
-                message_data["decrypted_content"] = decrypted
+                message_data["content"] = decrypted
                 serialized_messages.append(message_data)
             return Response(serialized_messages)
 
@@ -397,7 +397,7 @@ class MessageView(APIView):
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
                 data = MessageSerializer(msg).data
-                data["decrypted_content"] = decrypted
+                data["content"] = decrypted
                 response_data.append(data)
             return Response(response_data)
         return Response(

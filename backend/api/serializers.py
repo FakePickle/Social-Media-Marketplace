@@ -11,9 +11,48 @@ from .models import (Chat, CustomUser, Friendship, Group, GroupMessage,
 
 
 class MessageSerializer(serializers.ModelSerializer):
+    sender = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
+    receiver = serializers.SlugRelatedField(
+        slug_field="username", queryset=CustomUser.objects.all()
+    )
+
     class Meta:
         model = Message
-        fields = "__all__"
+        fields = ["sender", "receiver", "content", "timestamp"]
+
+    def create(self, validated_data):
+        sender_user = validated_data["sender"]
+        receiver_user = validated_data["receiver"]
+        content = validated_data["content"]
+
+        # Check if sender and receiver are valid users
+        try:
+            sender_user = CustomUser.objects.get(email=sender_user)
+            receiver_user = CustomUser.objects.get(email=receiver_user)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("Sender or receiver does not exist.")
+
+        # Create the message instance
+        validated_data["sender"] = sender_user
+        validated_data["receiver"] = receiver_user
+        validated_data["content"] = content
+
+        message = Message().encrypt_message(content, sender_user, receiver_user)
+        # Save the message to the database
+        validated_data["content"] = message
+        validated_data["timestamp"] = timezone.now()
+
+        return Message.objects.create(**validated_data)
+
+    def validate(self, attrs):
+        """Ensure sender and receiver are not the same"""
+        print(attrs)
+        if attrs["sender"] == attrs["receiver"]:
+            raise serializers.ValidationError("Sender and receiver cannot be the same.")
+        return attrs
+
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -138,52 +177,6 @@ class ChatSerializer(serializers.ModelSerializer):
 
         return chat
 
-
-class MessageSerializer(serializers.ModelSerializer):
-    sender = serializers.SlugRelatedField(
-        slug_field="username", queryset=CustomUser.objects.all()
-    )
-    receiver = serializers.SlugRelatedField(
-        slug_field="username", queryset=CustomUser.objects.all()
-    )
-
-    class Meta:
-        model = Message
-        fields = ["sender", "receiver", "content", "timestamp"]
-
-    def create(self, validated_data):
-        sender_user = validated_data["sender"]
-        receiver_user = validated_data["receiver"]
-        content = validated_data["content"]
-
-        # Check if sender and receiver are valid users
-        try:
-            sender_user = CustomUser.objects.get(email=sender_user)
-            receiver_user = CustomUser.objects.get(email=receiver_user)
-        except CustomUser.DoesNotExist:
-            raise serializers.ValidationError("Sender or receiver does not exist.")
-
-        # Create the message instance
-        validated_data["sender"] = sender_user
-        validated_data["receiver"] = receiver_user
-        validated_data["content"] = content
-
-        message = Message().encrypt_message(content, sender_user, receiver_user)
-        print(f"Encrypted message: {message}")
-        # Save the message to the database
-        validated_data["content"] = message
-        validated_data["timestamp"] = timezone.now()
-
-        return Message.objects.create(**validated_data)
-
-    def validate(self, attrs):
-        """Ensure sender and receiver are not the same"""
-        print(attrs)
-        if attrs["sender"] == attrs["receiver"]:
-            raise serializers.ValidationError("Sender and receiver cannot be the same.")
-        return attrs
-
-
 class FriendshipSerializer(serializers.ModelSerializer):
     user = serializers.CharField(max_length=150, write_only=True)
     friend = serializers.CharField(max_length=150, write_only=True)
@@ -254,6 +247,20 @@ class FriendshipSerializer(serializers.ModelSerializer):
             return friendship
         except Friendship.DoesNotExist:
             raise serializers.ValidationError("No pending friendship request exists.")
+
+    def delete(self, instance):
+        user = self.validated_data["user"]
+        friend = self.validated_data["friend"]
+        try:
+            print("trying to get friendship")
+            friendship = Friendship.objects.get(
+                Q(user=user, friend=friend) | Q(user=friend, friend=user)
+            )
+            print("trying to delete friendship")
+            friendship.delete()
+            return {"message": "Friendship deleted successfully."}
+        except Friendship.DoesNotExist:
+            raise serializers.ValidationError("Friendship does not exist.")
 
 
 class GroupSerializer(serializers.ModelSerializer):

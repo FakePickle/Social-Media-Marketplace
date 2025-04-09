@@ -26,6 +26,14 @@ from .views import (
     AdminMarketplaceListView,
     UserProfileView,
 )
+from .views import (AvailableMarketPlaceListView, ChatListCreateView,
+                    CombinedChatGroupView, FriendshipView, GroupCreateView,
+                    GroupDetailView, ListUserView, LoginView,
+                    MarketPlaceDetailView, MarketPlaceListCreateView,
+                    MessageView, RegisterView, RequestPasswordResetView,
+                    ResetPasswordView, UserMarketPlaceListView,
+                    UserProfileView, VerifyEmailView, VerifyPasswordResetView,
+                    VerifyTOTPView)
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -53,6 +61,7 @@ urlpatterns = [
     path("messages/", MessageView.as_view(), name="messages"),
     path("groups/", GroupCreateView.as_view(), name="create-group"),
     path("groups/<int:pk>/", GroupDetailView.as_view(), name="group-detail"),
+    path("create-chat/", ChatListCreateView.as_view(), name="create-chat"),
     path("friendships/", FriendshipView.as_view(), name="friendship-list-create"),
     path("friendships/accept/", FriendshipView.as_view(), name="friendship-accept"),
     path("friendships/delete/", FriendshipView.as_view(), name="friendship-delete"),

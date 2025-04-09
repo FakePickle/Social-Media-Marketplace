@@ -19,7 +19,7 @@ import { useChat } from '../contexts/ChatContext';
 import { AuthContext } from '../contexts/AuthContext';
 
 const Chat = () => {
-  const { userData } = useContext(AuthContext); // Fixed: useContext
+  const { userData } = useContext(AuthContext);
   const {
     chats,
     activeChat,
@@ -91,9 +91,7 @@ const Chat = () => {
               mt: 1,
               color: '#E0E1DD',
               borderColor: '#415A77',
-              '&:hover': {
-                borderColor: '#778DA9',
-              },
+              '&:hover': { borderColor: '#778DA9' },
             }}
             variant="outlined"
             fullWidth
@@ -123,9 +121,7 @@ const Chat = () => {
                 sx={{
                   mt: 1,
                   backgroundColor: '#415A77',
-                  '&:hover': {
-                    backgroundColor: '#778DA9',
-                  },
+                  '&:hover': { backgroundColor: '#778DA9' },
                 }}
               >
                 Create Chat
@@ -141,8 +137,8 @@ const Chat = () => {
           ) : error ? (
             <Typography sx={{ color: '#E0E1DD', p: 2 }}>{error}</Typography>
           ) : (
-            chats.map((chat) => (
-              <ListItem
+            chats.map((chat) => {
+                return (<ListItem
                 key={chat.id}
                 button
                 selected={activeChat?.id === chat.id}
@@ -150,13 +146,9 @@ const Chat = () => {
                 sx={{
                   '&.Mui-selected': {
                     backgroundColor: '#415A77',
-                    '&:hover': {
-                      backgroundColor: '#415A77',
-                    },
+                    '&:hover': { backgroundColor: '#415A77' },
                   },
-                  '&:hover': {
-                    backgroundColor: '#2B3F5C',
-                  },
+                  '&:hover': { backgroundColor: '#2B3F5C' },
                 }}
               >
                 <ListItemAvatar>
@@ -178,8 +170,8 @@ const Chat = () => {
                     </Typography>
                   }
                 />
-              </ListItem>
-            ))
+              </ListItem>);
+                                })
           )}
         </List>
       </Box>
@@ -188,14 +180,11 @@ const Chat = () => {
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         {activeChat ? (
           <>
-            {/* Chat Header */}
             <Box sx={{ p: 2, borderBottom: '1px solid #415A77' }}>
               <Typography variant="h6" sx={{ color: '#E0E1DD' }}>
                 {getOtherUser(activeChat)}
               </Typography>
             </Box>
-
-            {/* Messages */}
             <Box
               sx={{
                 flexGrow: 1,
@@ -219,9 +208,9 @@ const Chat = () => {
               ) : error ? (
                 <Typography sx={{ color: '#E0E1DD', textAlign: 'center' }}>{error}</Typography>
               ) : (
-                messages.map((message, index) => (
+                messages.map((message) => (
                   <Box
-                    key={index}
+                    key={message.id}
                     sx={{
                       alignSelf:
                         message.sender === userData?.username
@@ -242,7 +231,7 @@ const Chat = () => {
                       }}
                     >
                       <Typography variant="body1">
-                        {message.content} {/* Backend should return 'content' */}
+                        {message.decrypted_content || message.content}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -255,8 +244,6 @@ const Chat = () => {
                 ))
               )}
             </Box>
-
-            {/* Message Input */}
             <Box
               component="form"
               onSubmit={handleSendMessage}
