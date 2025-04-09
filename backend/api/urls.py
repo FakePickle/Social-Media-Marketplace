@@ -1,13 +1,31 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
-from .views import (AvailableMarketPlaceListView, CombinedChatGroupView,
-                    FriendshipView, GroupCreateView, GroupDetailView,
-                    ListUserView, LoginView, MarketPlaceDetailView,
-                    MarketPlaceListCreateView, MessageView, RegisterView,
-                    RequestPasswordResetView, ResetPasswordView,
-                    UserMarketPlaceListView, UserProfileView, VerifyEmailView,
-                    VerifyPasswordResetView, VerifyTOTPView)
+from .views import (
+    AvailableMarketPlaceListView,
+    CombinedChatGroupView,
+    FriendshipView,
+    GroupCreateView,
+    GroupDetailView,
+    ListUserView,
+    LoginView,
+    MarketPlaceDetailView,
+    MarketPlaceListCreateView,
+    MessageView,
+    RegisterView,
+    RequestPasswordResetView,
+    ResetPasswordView,
+    UserProfileView,
+    VerifyEmailView,
+    VerifyPasswordResetView,
+    VerifyTOTPView,
+    UserManagementView,
+    UserListView,
+    AdminDashboardView,
+    AdminMarketplaceItemView,
+    AdminMarketplaceListView,
+    UserProfileView,
+)
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -51,16 +69,24 @@ urlpatterns = [
         MarketPlaceDetailView.as_view(),
         name="marketplace-detail",
     ),
-    # List current user's items
+    # User Management
+    path("admin/users/", UserListView.as_view(), name="admin_user_list"),
     path(
-        "marketplace/my-items/",
-        UserMarketPlaceListView.as_view(),
-        name="my-marketplace-items",
+        "admin/users/<int:user_id>/",
+        UserManagementView.as_view(),
+        name="admin_user_management",
     ),
-    # List available (unsold) items
+    # Marketplace Management
     path(
-        "marketplace/available/",
-        AvailableMarketPlaceListView.as_view(),
-        name="available-marketplace-items",
+        "admin/marketplace/",
+        AdminMarketplaceListView.as_view(),
+        name="admin_marketplace_list",
     ),
+    path(
+        "admin/marketplace/<int:item_id>/",
+        AdminMarketplaceItemView.as_view(),
+        name="admin_marketplace_item",
+    ),
+    # Dashboard
+    path("admin/dashboard/", AdminDashboardView.as_view(), name="admin_dashboard"),
 ]

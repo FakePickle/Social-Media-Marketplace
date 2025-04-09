@@ -21,17 +21,31 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import (AccessToken, RefreshToken,
-                                             TokenError)
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken, TokenError
 
-from .models import (Chat, CustomUser, Friendship, Group, GroupMessage,
-                     MarketPlace, Message, VerificationCode)
-from .serializers import (ChatSerializer, FriendshipSerializer,
-                          GroupMessageSerializer, GroupSerializer,
-                          LoginSerializer, MarketPlaceSerializer,
-                          MessageSerializer, RegisterSerializer,
-                          TOTPVerificationSerializer, UserListSerializer,
-                          UserProfileSerializer)
+from .models import (
+    Chat,
+    CustomUser,
+    Friendship,
+    Group,
+    GroupMessage,
+    MarketPlace,
+    Message,
+    VerificationCode,
+)
+from .serializers import (
+    ChatSerializer,
+    FriendshipSerializer,
+    GroupMessageSerializer,
+    GroupSerializer,
+    LoginSerializer,
+    MarketPlaceSerializer,
+    MessageSerializer,
+    RegisterSerializer,
+    TOTPVerificationSerializer,
+    UserListSerializer,
+    UserProfileSerializer,
+)
 
 
 class RegisterView(APIView):
@@ -98,7 +112,7 @@ class RegisterView(APIView):
                 return Response(
                     {"error": f"Failed to generate verification code: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -123,7 +137,10 @@ class LoginView(APIView):
             if user and user.is_active:
                 if not user.is_verified:
                     return Response(
-                        {"message": "Account not verified. Please set up 2FA.", "email": email},
+                        {
+                            "message": "Account not verified. Please set up 2FA.",
+                            "email": email,
+                        },
                         status=status.HTTP_200_OK,  # Prompt for 2FA setup if unverified
                     )
                 return Response(
@@ -232,20 +249,26 @@ class FriendshipView(APIView):
         # Only show incoming requests where user is the recipient (friend)
         friendships = self.queryset.filter(friend__username=username, is_accepted=False)
         if not friendships.exists():
-            return Response({"detail": "No friendships found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No friendships found"}, status=status.HTTP_404_NOT_FOUND
+            )
         serializer = self.serializer_class(friendships, many=True)
         print(f"Serialized friendships: {serializer.data}")
         return Response(serializer.data)
 
     def post(self, request):
-        print(f"Authenticated user: {request.user.username if request.user.is_authenticated else 'None'}")
+        print(
+            f"Authenticated user: {request.user.username if request.user.is_authenticated else 'None'}"
+        )
         data = request.data.copy()
         data["user"] = request.user.username  # Force authenticated user
         print("Data received for friendship:", data)
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             friendship = serializer.save()
-            return Response(self.serializer_class(friendship).data, status=status.HTTP_201_CREATED)
+            return Response(
+                self.serializer_class(friendship).data, status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request):
@@ -266,17 +289,22 @@ class FriendshipView(APIView):
         request_user = request.user.username
         friend_user = request.data.get("friend")
         if not friend_user:
-            return Response({"error": "Friend username is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Friend username is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         data = {"user": request_user, "friend": friend_user}
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             try:
                 serializer.delete(data)
             except Friendship.DoesNotExist:
-                return Response({"error": "Friendship does not exist."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Friendship does not exist."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class ChatListCreateView(APIView):
@@ -286,7 +314,9 @@ class ChatListCreateView(APIView):
         user = request.user
         chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
         if not chats.exists():
-            return Response({"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND
+            )
         serializer = ChatSerializer(chats, many=True)
         return Response(serializer.data)
 
@@ -308,20 +338,33 @@ class MessageView(APIView):
 
     def get(self, request, pk=None, group=None):
         sender_username = request.user.username
-        receiver_username = request.query_params.get("receiver")  # Use query param for receiver
+        receiver_username = request.query_params.get(
+            "receiver"
+        )  # Use query param for receiver
 
         if pk is not None:
             group_obj = get_object_or_404(Group, pk=pk)
             if not group_obj.members.filter(username=sender_username).exists():
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
-            messages = GroupMessage.objects.filter(group=group_obj).order_by("timestamp")
+                return Response(
+                    {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
+                )
+            messages = GroupMessage.objects.filter(group=group_obj).order_by(
+                "timestamp"
+            )
             if not messages.exists():
-                return Response({"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND
+                )
             serialized_messages = []
             for msg in messages:
                 try:
                     content = ast.literal_eval(msg.content)
-                    decrypted = GroupMessage.decrypt_message(content["ciphertext"], content["signature"], msg.sender, group_obj)
+                    decrypted = GroupMessage.decrypt_message(
+                        content["ciphertext"],
+                        content["signature"],
+                        msg.sender,
+                        group_obj,
+                    )
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
                 message_data = GroupMessageSerializer(msg).data
@@ -334,22 +377,32 @@ class MessageView(APIView):
                 user = CustomUser.objects.get(username=sender_username)
                 receiver = CustomUser.objects.get(username=receiver_username)
             except CustomUser.DoesNotExist:
-                return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
+                )
             messages = Message.objects.filter(
-                (Q(sender=user) & Q(receiver=receiver)) | (Q(sender=receiver) & Q(receiver=user))
+                (Q(sender=user) & Q(receiver=receiver))
+                | (Q(sender=receiver) & Q(receiver=user))
             ).order_by("timestamp")
             response_data = []
             for msg in messages:
                 try:
                     content_dict = ast.literal_eval(msg.content)
-                    decrypted = Message.decrypt_message(content_dict["ciphertext"], content_dict["signature"], msg.sender, msg.receiver)
+                    decrypted = Message.decrypt_message(
+                        content_dict["ciphertext"],
+                        content_dict["signature"],
+                        msg.sender,
+                        msg.receiver,
+                    )
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
                 data = MessageSerializer(msg).data
                 data["decrypted_content"] = decrypted
                 response_data.append(data)
             return Response(response_data)
-        return Response({"detail": "Receiver required for DMs"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Receiver required for DMs"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     def post(self, request):
         data = request.data.copy()
@@ -364,7 +417,10 @@ class MessageView(APIView):
                 message = serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"error": "Invalid request: group or receiver required."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "Invalid request: group or receiver required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class CombinedChatGroupView(APIView):
@@ -375,20 +431,28 @@ class CombinedChatGroupView(APIView):
         chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
         groups = Group.objects.filter(members=user)
         if not (chats.exists() or groups.exists()):
-            return Response({"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         chat_last_messages = {}
         for chat in chats:
             last_message = chat.messages.order_by("-timestamp").first()
             if last_message:
-                chat_last_messages[chat.id] = {"content": last_message.content, "timestamp": last_message.timestamp.isoformat()}
+                chat_last_messages[chat.id] = {
+                    "content": last_message.content,
+                    "timestamp": last_message.timestamp.isoformat(),
+                }
 
         group_last_messages = {}
         for group in groups:
             last_message = group.messages.order_by("-timestamp").first()
             if last_message:
                 decrypted_content = self.decrypt_group_message(last_message)
-                group_last_messages[group.id] = {"content": decrypted_content, "timestamp": last_message.timestamp.isoformat()}
+                group_last_messages[group.id] = {
+                    "content": decrypted_content,
+                    "timestamp": last_message.timestamp.isoformat(),
+                }
 
         chat_serializer = ChatSerializer(chats, many=True)
         group_serializer = GroupSerializer(groups, many=True)
@@ -396,18 +460,36 @@ class CombinedChatGroupView(APIView):
         for chat_data in chat_serializer.data:
             chat_data["type"] = "chat"
             chat_id = chat_data["id"]
-            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get("content")
-            chat_data["last_message_timestamp"] = chat_last_messages.get(chat_id, {}).get("timestamp")
+            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get(
+                "content"
+            )
+            chat_data["last_message_timestamp"] = chat_last_messages.get(
+                chat_id, {}
+            ).get("timestamp")
 
         for group_data in group_serializer.data:
             group_data["type"] = "group"
             group_id = group_data["id"]
-            group_data["last_message"] = group_last_messages.get(group_id, {}).get("content")
-            group_data["last_message_timestamp"] = group_last_messages.get(group_id, {}).get("timestamp")
+            group_data["last_message"] = group_last_messages.get(group_id, {}).get(
+                "content"
+            )
+            group_data["last_message_timestamp"] = group_last_messages.get(
+                group_id, {}
+            ).get("timestamp")
 
         combined_list = chat_serializer.data + group_serializer.data
-        sorted_list = sorted(combined_list, key=lambda x: x.get("last_message_timestamp") or "", reverse=True)
-        return Response({"results": sorted_list, "chat_count": len(chat_serializer.data), "group_count": len(group_serializer.data)})
+        sorted_list = sorted(
+            combined_list,
+            key=lambda x: x.get("last_message_timestamp") or "",
+            reverse=True,
+        )
+        return Response(
+            {
+                "results": sorted_list,
+                "chat_count": len(chat_serializer.data),
+                "group_count": len(group_serializer.data),
+            }
+        )
 
     def decrypt_group_message(self, group_message):
         try:
@@ -418,7 +500,11 @@ class CombinedChatGroupView(APIView):
             )
             plain_text = private_key.decrypt(
                 ciphertext,
-                padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
+                padding.OAEP(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                ),
             )
             return plain_text.decode()
         except Exception as e:
@@ -432,7 +518,9 @@ class GroupCreateView(APIView):
         user = request.user
         groups = Group.objects.filter(members=user)
         if not groups.exists():
-            return Response({"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND
+            )
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data)
 
@@ -446,21 +534,26 @@ class GroupCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class GroupDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
         if not group.members.filter(username=request.user.username).exists():
-            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this group"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = GroupSerializer(group)
         return Response(serializer.data)
 
     def put(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
         if not group.members.filter(username=request.user.username).exists():
-            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this group"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
             group = serializer.update(group, request.data)
@@ -470,7 +563,10 @@ class GroupDetailView(APIView):
     def delete(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
         if not group.members.filter(username=request.user.username).exists():
-            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this group"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
             group = serializer.remove_member_by_name(group, request.data.get("member"))
@@ -478,22 +574,22 @@ class GroupDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# List and Create View
 class MarketPlaceListCreateView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
-    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # List all marketplace items
         items = self.queryset.all()
         serializer = self.serializer_class(items, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        data = request.data.copy()
-        data["created_by"] = request.user.username  # Force authenticated user
-        serializer = self.serializer_class(data=data)
+        # Create a new marketplace item
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            item = serializer.save(created_by=request.user)
+            item = serializer.save(created_by=request.data.get("created_by"))
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -501,24 +597,28 @@ class MarketPlaceListCreateView(APIView):
 class MarketPlaceDetailView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
-    permission_classes = [IsAuthenticated]
 
-    def get_object(self, pk):
-        obj = get_object_or_404(MarketPlace, pk=pk)
-        if request.user.username != obj.created_by.username:
-            raise PermissionDenied("You can only modify your own marketplace items")
-        return obj
+    def get(self, request, pk):
+        """Retrieve item payment qr"""
+        instance = get_object_or_404(self.queryset, pk=pk)
+        serializer = self.serializer_class(instance)
+        print(instance.price, instance.upi_id, instance.created_by.username)
+        upi = f"upi://pay?pa={instance.upi_id}&pn={instance.created_by.username}&am={instance.price}&tid={instance.id}&cu=INR"
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(upi)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
 
-    def put(self, request, pk):
-        instance = self.get_object(pk)
-        serializer = MarketPlaceSerializer(instance, data=request.data, partial=True, context={"request": request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        serializer.data["qr_code"] = f"data:image/png;base64,{qr_code}"
+        return Response({"qr_code": f"data:image/png;base64,{qr_code}"})
 
     def delete(self, request, pk):
-        instance = self.get_object(pk)
+        # Ensure only the creator can delete
+        instance = get_object_or_404(self.queryset, pk=pk)
         instance.delete()
         return Response({"Status: success"}, status=status.HTTP_204_NO_CONTENT)
 
@@ -739,12 +839,21 @@ class ListUserView(APIView):
 
     def get(self, request):
         try:
-            active_users = CustomUser.objects.filter(is_active=True).exclude(id=request.user.id)
-            serializer = UserListSerializer(active_users, many=True, context={"request": request})
-            return Response({"users": serializer.data, "count": active_users.count()}, status=status.HTTP_200_OK)
+            active_users = CustomUser.objects.filter(is_active=True).exclude(
+                id=request.user.id
+            )
+            serializer = UserListSerializer(
+                active_users, many=True, context={"request": request}
+            )
+            return Response(
+                {"users": serializer.data, "count": active_users.count()},
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
-            return Response({"error": f"Failed to fetch users: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response(
+                {"error": f"Failed to fetch users: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserProfileView(APIView):
@@ -817,5 +926,160 @@ class UserProfileView(APIView):
         except Exception as e:
             return Response(
                 {"error": f"Failed to update user profile: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+# User Management Views
+class UserListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # Get all users (active and inactive)
+            users = CustomUser.objects.all()
+
+            # Filter by active status if specified
+            active_status = request.query_params.get("active")
+            if active_status is not None:
+                is_active = active_status.lower() == "true"
+                users = users.filter(is_active=is_active)
+
+            serializer = UserListSerializer(
+                users, many=True, context={"request": request}
+            )
+
+            return Response(
+                {
+                    "users": serializer.data,
+                    "count": users.count(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch users: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class UserManagementView(APIView):
+    permission_classes = [AllowAny]
+
+    def delete(self, request, user_id):
+        """Remove a user by deactivating their account"""
+        try:
+            user = get_object_or_404(CustomUser, id=user_id)
+
+            # Instead of permanent deletion, deactivate the user
+            user.is_active = False
+            user.save()
+
+            return Response(
+                {"message": f"User {user.username} has been deactivated"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to deactivate user: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def put(self, request, user_id):
+        """Reactivate a previously deactivated user"""
+        try:
+            user = get_object_or_404(CustomUser, id=user_id)
+
+            # Reactivate the user
+            user.is_active = True
+            user.save()
+
+            return Response(
+                {"message": f"User {user.username} has been reactivated"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to reactivate user: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+# Marketplace Management Views
+class AdminMarketplaceListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Get all marketplace items"""
+        try:
+            # Get all items
+            items = MarketPlace.objects.all()
+
+            # Filter by sold status if specified
+            sold_status = request.query_params.get("sold")
+            if sold_status is not None:
+                is_sold = sold_status.lower() == "true"
+                items = items.filter(is_sold=is_sold)
+
+            serializer = MarketPlaceSerializer(items, many=True)
+
+            return Response(
+                {"items": serializer.data, "count": items.count()},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch marketplace items: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class AdminMarketplaceItemView(APIView):
+    permission_classes = [AllowAny]
+
+    def delete(self, request, item_id):
+        """Delete a marketplace item"""
+        try:
+            item = get_object_or_404(MarketPlace, id=item_id)
+            item.delete()
+
+            return Response(
+                {"message": f"Marketplace item '{item.title}' has been deleted"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to delete marketplace item: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+# Dashboard Analytics View
+class AdminDashboardView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Get dashboard analytics data"""
+        try:
+            # Count stats for dashboard
+            total_users = CustomUser.objects.count()
+            active_users = CustomUser.objects.filter(is_active=True).count()
+            total_items = MarketPlace.objects.count()
+            sold_items = MarketPlace.objects.filter(is_sold=True).count()
+
+            return Response(
+                {
+                    "total_users": total_users,
+                    "active_users": active_users,
+                    "inactive_users": total_users - active_users,
+                    "total_marketplace_items": total_items,
+                    "sold_items": sold_items,
+                    "available_items": total_items - sold_items,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch dashboard data: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
