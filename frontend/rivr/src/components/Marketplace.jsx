@@ -30,10 +30,12 @@ const Marketplace = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("card");
   const [paymentDetails, setPaymentDetails] = useState({  upi_id: "" });
+  const [image, setImage] = useState("/G_Auth_QR_Code.png");
   const [products, setProducts] = useState([]); // Initialize products state
+  const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
   const [newProduct, setNewProduct] = useState({
+    id: "",
     name: "",
     description: "",
     price: "",
@@ -49,22 +51,24 @@ const Marketplace = () => {
   // Auth Context
   const userData = useContext(AuthContext);
 
-  // api call to fetch products
+  // api call to fetch products every 1 minute
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         api.defaults.headers.common["Authorization"] = `Bearer ${localStorage.getItem("accessToken")}`;
         const response = await api.get("marketplace/");
-        console.log(response.data); // Changed from response["data"]
-        setProducts(response.data); // Changed from response["data"]
+        const sortedProducts = response.data.sort((a, b) => a.price - b.price);
+        setProducts(sortedProducts);
       } catch (error) {
         console.error("Error fetching products:", error);
       }
     };
-
+  
     fetchProducts();
-    filteredProducts.sort((a, b) => a.price - b.price); // Sort products by price
-  }, []); // Added dependency array
+    const interval = setInterval(fetchProducts, 60000); // Fetch products every 1 minute
+    return () => clearInterval(interval); // Cleanup interval on component unmount
+  }); // Fetch products only once when the component mounts
+   // Added dependency array
 
 
   const handleOpenModal = (product) => {
@@ -110,9 +114,32 @@ const Marketplace = () => {
     setAddModalOpen(false);
   };
   const handleBuyNow = (product) => {
-    setCart([product]);
-    setPaymentModalOpen(true);
+    // send request to get qr code
+    api.get(`marketplace/${product.id}/`)
+      .then((response) => {
+        setImage(response.data.qr_code); // Assuming the response contains the QR code URL
+      })
+      .catch((error) => {
+        console.error("Error fetching QR code:", error);
+      });
+    setCart([product]); 
+    setPaymentModalOpen(true); 
   };
+
+  const handlePayment = (cart) => {
+    api.delete(`marketplace/${cart[0].id}/`)
+      .then((response) => {
+        console.log("Product deleted successfully:", response.data);
+
+      })
+      .catch((error) => {
+        console.error("Error deleting product:", error);
+      });
+      // remove product from cart
+      setCart([]);
+      setPaymentModalOpen(false);
+      setOpenModal(false);
+    }
 
 
   return (
@@ -173,7 +200,7 @@ const Marketplace = () => {
                   {product.name}
                 </Typography>
                 <Typography variant="body1" color="gray">
-                  ${product.price}
+                ₹{product.price}
                 </Typography>
               </CardContent>
             </Card>
@@ -204,7 +231,7 @@ const Marketplace = () => {
                 {selectedProduct.name}
               </Typography>
               <Typography variant="h6" color="lightgray" sx={{ marginTop: "10px" }}>
-                ${selectedProduct.price}
+              ₹{selectedProduct.price}
               </Typography>
               <Typography variant="body1" sx={{ marginTop: "10px", color: "gray" }}>
                 {selectedProduct.description}
@@ -248,19 +275,19 @@ const Marketplace = () => {
             <>
               {cart.map((item) => (
                 <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-                  <Typography>{item.name} - ${item.price}</Typography>
+                  <Typography>{item.name} - ₹{item.price}</Typography>
                   <IconButton onClick={() => removeFromCart(item.listing_id)} sx={{ color: "red" }}>
                     <RemoveShoppingCart />
                   </IconButton>
                 </Box>
               ))}
+              <Typography sx={{ mt: 2, fontWeight: "bold" }}>Total: ₹{total.toFixed(2)}</Typography>
               <Box sx={{ textAlign: "center", marginTop: "20px" }}>
                 <Button
                   variant="contained"
                   sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" } }}
                   onClick={() => {
-                    setCartOpen(false);
-                    setPaymentModalOpen(true);
+                    handlePayment(cart);
                   }}
                 >
                   Proceed to Checkout
@@ -351,106 +378,67 @@ const Marketplace = () => {
           <Add />
         </Fab>
         <Modal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)}>
-          <Box
-            sx={{
-              position: "absolute",
-              top: "50%", left: "50%",
-              transform: "translate(-50%, -50%)", width: 400,
-              backgroundColor: "#1B263B", color: "white",
-              padding: 4, borderRadius: "12px", boxShadow: 24,
-            }}
-          >
-            <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Payment Gateway</Typography>
-            {/* Order Summary */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" fontWeight="bold">Order Summary</Typography>
-              {cart.map((item) => (
-                <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
-                  <Typography>{item.name}</Typography>
-                  <Typography>${item.price}</Typography>
-                </Box>
-              ))}
-              <Divider sx={{ my: 1, borderColor: "gray" }} />
-              <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
-                <Typography fontWeight="bold">Total:</Typography>
-                <Typography fontWeight="bold">
-                  ${cart.reduce((total, item) => total + parseFloat(item.price), 0).toFixed(2)}
-                </Typography>
-              </Box>
-            </Box>
-            <Box sx={{ mb: 2 }}>
-              <Button
-                variant={selectedPaymentMethod === "card" ? "contained" : "outlined"}
-                sx={{ mr: 1, backgroundColor: selectedPaymentMethod === "card" ? "#238636" : "transparent", color: "white" }}
-                onClick={() => setSelectedPaymentMethod("card")}
-              >
-                Credit Card
-              </Button>
-              <Button
-                variant={selectedPaymentMethod === "upi" ? "contained" : "outlined"}
-                sx={{ backgroundColor: selectedPaymentMethod === "upi" ? "#238636" : "transparent", color: "white" }}
-                onClick={() => setSelectedPaymentMethod("upi")}
-              >
-                UPI ID
-              </Button>
-            </Box>
+  <Box
+    sx={{
+      position: "absolute",
+      top: "50%", left: "50%",
+      transform: "translate(-50%, -50%)", width: 400,
+      backgroundColor: "#1B263B", color: "white",
+      padding: 4, borderRadius: "12px", boxShadow: 24,
+    }}
+  >
+    <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Payment Gateway</Typography>
 
-            {selectedPaymentMethod === "card" ? (
-              <>
-                <TextField
-                  fullWidth
-                  label="Card Number"
-                  variant="outlined"
-                  value={paymentDetails.cardNumber}
-                  onChange={(e) => setPaymentDetails({ ...paymentDetails, cardNumber: e.target.value })}
-                  sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
-                />
-                <Box sx={{ display: "flex", gap: 1 }}>
-                  <TextField
-                    label="Expiry"
-                    variant="outlined"
-                    value={paymentDetails.expiry}
-                    onChange={(e) => setPaymentDetails({ ...paymentDetails, expiry: e.target.value })}
-                    sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" }, flex: 1 }}
-                  />
-                  <TextField
-                    label="CVV"
-                    variant="outlined"
-                    value={paymentDetails.cvv}
-                    onChange={(e) => setPaymentDetails({ ...paymentDetails, cvv: e.target.value })}
-                    sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" }, flex: 1 }}
-                  />
-                </Box>
-              </>
-            ) : (
-              <TextField
-                fullWidth
-                label="UPI ID"
-                variant="outlined"
-                value={paymentDetails.upiId}
-                onChange={(e) => setPaymentDetails({ ...paymentDetails, upiId: e.target.value })}
-                sx={{ mb: 2, input: { color: "white" }, label: { color: "gray" } }}
-              />
-            )}
+    {/* Order Summary */}
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="h6" fontWeight="bold">Order Summary</Typography>
+      {cart.map((item) => (
+        <Box key={item.listing_id} sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+          <Typography>{item.name}</Typography>
+          <Typography>₹{item.price}</Typography>
+        </Box>
+      ))}
+      <Divider sx={{ my: 1, borderColor: "gray" }} />
+      <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
+        <Typography fontWeight="bold">Total:</Typography>
+        <Typography fontWeight="bold">
+          ₹{cart.reduce((total, item) => total + parseFloat(item.price), 0).toFixed(2)}
+        </Typography>
+      </Box>
+    </Box>
 
-            <Box sx={{ textAlign: "center" }}>
-              <Button
-                onClick={() => {
-                  alert("Payment successful!");
-                  setPaymentModalOpen(false);
-                  setOpenModal(false); // Close product modal too
-                }}
-                variant="contained"
-                sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" }, mr: 2 }}
-              >
-                Pay Now
-              </Button>
-              <Button onClick={() => setPaymentModalOpen(false)} sx={{ color: "lightgray" }}>
-                Cancel
-              </Button>
-            </Box>
-          </Box>
-        </Modal>
+    {/* UPI QR Code Section */}
+    <Typography variant="body1" sx={{ mb: 2 }}>
+      Scan the QR code below to pay via UPI:
+    </Typography>
+    <Box
+      sx={{
+        display: "flex", justifyContent: "center", alignItems: "center", mb: 2,
+        backgroundColor: "white", borderRadius: 2, padding: 2
+      }}
+    >
+      <img
+        src={image}
+        alt="/G_Auth_QR_Code.png"
+        style={{ width: "200px", height: "200px" }}
+      />
+    </Box>
+
+    <Box sx={{ textAlign: "center", mt: 3 }}>
+      <Button
+        variant="contained"
+        sx={{ backgroundColor: "#238636", "&:hover": { backgroundColor: "#2EA043" } }}
+        onClick={() => {
+          handlePayment(cart); // Call the payment function with the cart items
+          alert("Payment confirmed (simulate UPI success).");
+          setPaymentModalOpen(false); // Close the modal after payment
+        }}
+      >
+        Confirm Payment
+      </Button>
+    </Box>
+  </Box>
+</Modal>
 
     </div>
   );
