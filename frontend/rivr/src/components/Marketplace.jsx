@@ -53,7 +53,7 @@ const Marketplace = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        api.defaults.headers.common["Authorization"] = `Bearer ${localStorage.getItem("access_token")}`;
+        api.defaults.headers.common["Authorization"] = `Bearer ${localStorage.getItem("accessToken")}`;
         const response = await api.get("marketplace/");
         console.log(response.data); // Changed from response["data"]
         setProducts(response.data); // Changed from response["data"]
@@ -110,8 +110,8 @@ const Marketplace = () => {
     setAddModalOpen(false);
   };
   const handleBuyNow = (product) => {
-    setCart([product]); 
-    setPaymentModalOpen(true); 
+    setCart([product]);
+    setPaymentModalOpen(true);
   };
 
 

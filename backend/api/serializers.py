@@ -6,15 +6,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import (
-    Chat,
-    CustomUser,
-    Friendship,
-    Group,
-    GroupMessage,
-    MarketPlace,
-    Message,
-)
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage,
+                     MarketPlace, Message)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -192,70 +185,75 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class FriendshipSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(max_length=150, write_only=True)
+    friend = serializers.CharField(max_length=150, write_only=True)
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    friend_username = serializers.CharField(source="friend.username", read_only=True)
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    user_bio = serializers.CharField(source="user.bio", read_only=True, allow_null=True)
+    user_profile_pic = serializers.CharField(source="user.profile_picture", read_only=True, allow_null=True)
+
     class Meta:
         model = Friendship
         fields = [
-            "user",
-            "friend",
-            "created_at",
-            "is_accepted",
-        ]  # Add any other fields you need
-        depth = 1  # Optional: to serialize related user objects (user/friend)
+            "user", "friend", "user_username", "friend_username",
+            "user_id", "user_bio", "user_profile_pic",
+            "created_at", "is_accepted"
+        ]
 
     def validate(self, data):
-        user = self.initial_data.get("user")
-        friend = self.initial_data.get("friend")
-
+        user = data.get("user")
+        friend = data.get("friend")
+        if not user or not friend:
+            raise serializers.ValidationError("Both user and friend are required.")
         try:
             user_obj = CustomUser.objects.get(username=user)
             friend_obj = CustomUser.objects.get(username=friend)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User or friend does not exist.")
-
         if user_obj == friend_obj:
             raise serializers.ValidationError("You cannot befriend yourself.")
-
         data["user"] = user_obj
         data["friend"] = friend_obj
         return data
 
     def create(self, validated_data):
-        user = validated_data.get("user")
-        friend = validated_data.get("friend")
-
+        user = validated_data["user"]
+        friend = validated_data["friend"]
+        # Check for existing friendships in either direction
+        if Friendship.objects.filter(
+            user=user, friend=friend, is_accepted=True
+        ).exists():
+            raise serializers.ValidationError("You are already friends with this user.")
+        if Friendship.objects.filter(
+            user=friend, friend=user, is_accepted=True
+        ).exists():
+            raise serializers.ValidationError("You are already friends with this user.")
+        if Friendship.objects.filter(
+            user=user, friend=friend, is_accepted=False
+        ).exists():
+            raise serializers.ValidationError("Accept pending friend request.")
+        if Friendship.objects.filter(
+            user=friend, friend=user, is_accepted=False
+        ).exists():
+            raise serializers.ValidationError("Friend request already sent.")
         friendship = Friendship.objects.create(
-            user=user, friend=friend, is_accepted=False  # Default value if needed
+            user=user, friend=friend, is_accepted=False
         )
         return friendship
 
     def update_friendship(self, validated_data):
-        user = validated_data.get("user")
-        friend = validated_data.get("friend")
-        status = validated_data.get("status")
-
-        if status != "accepted":
-            raise serializers.ValidationError("Invalid status.")
-
+        user = validated_data["user"]
+        friend = validated_data["friend"]
         try:
-            user_instance = CustomUser.objects.get(username=user)
-            friend_instance = CustomUser.objects.get(username=friend)
-        except CustomUser.DoesNotExist:
-            raise serializers.ValidationError("User or friend does not exist.")
-
-        friendship = Friendship.objects.get(user=user_instance, friend=friend_instance)
-        friendship.is_accepted = True
-        friendship.save()
-        return friendship
-
-    def delete(self, instance):
-        try:
-            user = CustomUser.objects.get(username=instance.get("user"))
-            friend = CustomUser.objects.get(username=instance.get("friend"))
-            friendship = Friendship.objects.get(user=user, friend=friend)
-            friendship.delete()
+            friendship = Friendship.objects.get(
+                user=friend, friend=user, is_accepted=False
+            )
+            friendship.is_accepted = True
+            friendship.save()
             return friendship
         except Friendship.DoesNotExist:
-            raise serializers.ValidationError("Friendship does not exist.")
+            raise serializers.ValidationError("No pending friendship request exists.")
 
 
 class GroupSerializer(serializers.ModelSerializer):

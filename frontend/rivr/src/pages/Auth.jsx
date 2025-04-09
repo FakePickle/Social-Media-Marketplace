@@ -3,334 +3,305 @@ import React, { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import ForgotPassw from "../components/ForgotPassw";
-import api from "../utils/api";
 
 function Auth() {
-  const { login, register, verifyEmail, verify2FA } = useContext(AuthContext);
-  const [isSwapped, setIsSwapped] = useState(false);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isConfirmingEmail, setIsConfirmingEmail] = useState(false);
-  const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [qrCodeURL, setQrCodeURL] = useState("");
-  const [totpSecretKey, settotpSecretKey] = useState("");
-  const [dob, setDob] = useState("");
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
+    const { login, register, verifyEmail, verify2FA } = useContext(AuthContext);
+    const [isSwapped, setIsSwapped] = useState(false); // Login/Register card swap
+    const [authMode, setAuthMode] = useState("default"); // "default", "verifyEmail", "verify2FA"
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [firstName, setFirstName] = useState("");
+    const [lastName, setLastName] = useState("");
+    const [email, setEmail] = useState("");
+    const [dob, setDob] = useState("");
+    const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
+    const [qrCodeURL, setQrCodeURL] = useState("");
+    const [totpSecretKey, setTotpSecretKey] = useState("");
+    const [isForgotPassword, setIsForgotPassword] = useState(false);
+    const [error, setError] = useState("");
+    const [isRegistering, setIsRegistering] = useState(false); // Track registration flow
 
-  const navigate = useNavigate();
+    const navigate = useNavigate();
 
-  const handleSwap = () => {
-    setIsSwapped(!isSwapped);
-  };
-
-  useEffect(() => {
-    return () => {
-      // Cleanup sensitive state on unmount
-      setEmail("");
-      setPassword("");
-      setFirstName("");
-      setUsername("");
-      setLastName("");
-      setVerificationCode(["", "", "", "", "", ""]);
-      setQrCodeURL("");
-      settotpSecretKey("");
+    const handleSwap = () => {
+        setIsSwapped(!isSwapped);
+        setError("");
     };
-  }, []);
 
-  const handleEmailVerification = async () => {
-    try {
-      const otp = verificationCode.join("");
-      // Verify the email with OTP
-      const data = await verifyEmail(otp, email);
-      
-      if (data && data.qr_code && data.totp_uri) {
-        // Set the QR code and TOTP data from the response
-        setQrCodeURL(data.qr_code);
-        settotpSecretKey(data.totp_uri);
-        // Clear verification code for 2FA
-        setVerificationCode(["", "", "", "", "", ""]);
-        // Move to 2FA setup
-        setIsConfirmingEmail(false);
-        setIsRegistering(true);
-      } else {
-        throw new Error("Invalid verification response");
-      }
-    } catch (error) {
-      console.error("Email verification error:", error);
-      alert(error.response?.data?.error || error.message || "Verification failed");
+    // Cleanup sensitive state on unmount
+    useEffect(() => {
+        return () => {
+            setEmail("");
+            setPassword("");
+            setFirstName("");
+            setUsername("");
+            setLastName("");
+            setDob("");
+            setVerificationCode(["", "", "", "", "", ""]);
+            setQrCodeURL("");
+            setTotpSecretKey("");
+            setError("");
+        };
+    }, []);
+
+    const handleLogin = async () => {
+        if (!email.trim() || !password.trim()) {
+            setError("Email and password are required.");
+            return;
+        }
+        try {
+            const data = await login(email, password);
+            setAuthMode("verify2FA");
+            setError("");
+        } catch (error) {
+            setError(error.error || "Login failed");
+        }
+    };
+
+    const handleRegister = async () => {
+        if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
+            setError("All fields are required.");
+            return;
+        }
+        try {
+            const data = await register(email, username, password, firstName, lastName, dob);
+            setAuthMode("verifyEmail");
+            setIsRegistering(true);
+            setError("");
+        } catch (error) {
+            setError(error.error || "Registration failed");
+        }
+    };
+
+    const handleEmailVerification = async () => {
+        try {
+            const otp = verificationCode.join("");
+            const data = await verifyEmail(otp, email);
+            if (data.qr_code && data.totp_uri) {
+                setQrCodeURL(data.qr_code);
+                setTotpSecretKey(data.totp_uri);
+                setVerificationCode(["", "", "", "", "", ""]);
+                setAuthMode("verify2FA");
+                setError("");
+            } else {
+                throw new Error("Invalid verification response");
+            }
+        } catch (error) {
+            setError(error.error || error.message || "Email verification failed");
+        }
+    };
+
+    const handleLoginConfirmSignUp = async () => {
+        try {
+            const totp = verificationCode.join("");
+            await verify2FA(totp, email);
+            setEmail("");
+            setPassword("");
+            setVerificationCode(["", "", "", "", "", ""]);
+            setAuthMode("default");
+            setError("");
+            navigate("/home");
+        } catch (error) {
+            setError(error.error || error.message || "2FA verification failed");
+        }
+    };
+
+    const handleRegisterConfirmSignUp = async () => {
+        try {
+            const totp = verificationCode.join("");
+            await verify2FA(totp, email);
+            setEmail("");
+            setPassword("");
+            setFirstName("");
+            setUsername("");
+            setLastName("");
+            setDob("");
+            setVerificationCode(["", "", "", "", "", ""]);
+            setQrCodeURL("");
+            setTotpSecretKey("");
+            setIsSwapped(false);
+            setIsRegistering(false);
+            setAuthMode("default");
+            setError("");
+            navigate("/home");
+        } catch (error) {
+            setError(error.error || error.message || "2FA verification failed");
+        }
+    };
+
+    const handleVerificationInput = (index, value) => {
+        if (/^\d?$/.test(value)) {
+            const newCode = [...verificationCode];
+            newCode[index] = value;
+            setVerificationCode(newCode);
+        }
+    };
+
+    const handleVirtualKeyPress = (value) => {
+        const emptyIndex = verificationCode.findIndex((digit) => digit === "");
+        if (emptyIndex !== -1) {
+            handleVerificationInput(emptyIndex, value);
+        }
+    };
+
+    const handleDeletePress = () => {
+        const filledIndex = verificationCode.findLastIndex((digit) => digit !== "");
+        if (filledIndex !== -1) {
+            handleVerificationInput(filledIndex, "");
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter") {
+            if (!isSwapped) handleLogin();
+                else handleRegister();
+        }
+    };
+
+    if (isForgotPassword) {
+        return <ForgotPassw />;
     }
-  };
 
-  const handleRegister = async () => {
-    if (!username.trim() || !password.trim() || !email.trim() || !firstName.trim() || !lastName.trim() || !dob) {
-      alert("All fields are required.");
-      return;
+    if (authMode === "verifyEmail") {
+        return (
+            <div style={styles.wrapper}>
+                <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+                    <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+                </div>
+                <Card sx={styles.confirmCard}>
+                    <Typography variant="h4" sx={styles.title}>
+                        Email Verification
+                    </Typography>
+                    <Typography variant="h5" sx={styles.title}>
+                        Enter 6-Digit Code sent on Email
+                    </Typography>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                        {verificationCode.map((digit, index) => (
+                            <TextField
+                                key={index}
+                                variant="outlined"
+                                inputProps={{ maxLength: 1, style: { textAlign: "center" }, readOnly: true }}
+                                value={digit}
+                                onChange={(e) => handleVerificationInput(index, e.target.value)}
+                            />
+                        ))}
+                    </div>
+                    <div style={styles.keypad}>
+                        {[...Array(9).keys()].map((num) => (
+                            <Button
+                                key={num + 1}
+                                sx={styles.keyButton}
+                                variant="contained"
+                                onClick={() => handleVirtualKeyPress(String(num + 1))}
+                            >
+                                {num + 1}
+                            </Button>
+                        ))}
+                        <Button variant="contained" sx={styles.keyButton} onClick={() => handleVirtualKeyPress("0")}>
+                            0
+                        </Button>
+                        <Button variant="contained" sx={styles.deleteButton} onClick={handleDeletePress}>
+                            Delete
+                        </Button>
+                    </div>
+                    <Button variant="contained" onClick={handleEmailVerification} sx={styles.verifyButton}>
+                        Verify
+                    </Button>
+                    {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
+                </Card>
+            </div>
+        );
     }
-    try {
-      // Register user - this will send verification email
-      await register(
-        email,
-        username,
-        password,
-        firstName,
-        lastName,
-        dob
-      );
-      // Clear verification code for email verification
-      setVerificationCode(["", "", "", "", "", ""]);
-      // Move to email verification page
-      setIsConfirmingEmail(true);
-    } catch (error) {
-      console.error("Registration error:", error);
-      alert(error.response?.data?.error || error.error || "Registration failed");
+
+    if (authMode === "verify2FA") {
+        return (
+            <div style={styles.wrapper}>
+                <div style={{ position: "absolute", top: "20px", left: "20px" }}>
+                    <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
+                </div>
+                <Card sx={styles.confirmCard}>
+                    <Typography variant="h4" sx={styles.title}>
+                        2 Factor Authentication
+                    </Typography>
+                    {isRegistering && qrCodeURL && (
+                        <>
+                            <Typography variant="h5" sx={styles.title}>
+                                Scan QR Code to Set Up 2FA
+                            </Typography>
+                            <img
+                                src={qrCodeURL}
+                                alt="Google Auth QR"
+                                style={{ width: "300px", height: "300px", marginBottom: "20px" }}
+                            />
+                            <Typography variant="body2" sx={{ paddingBottom: "10px" }}>
+                                Use an Authenticator App to scan the QR code.
+                            </Typography>
+                            {totpSecretKey && (
+                                <>
+                                    <Typography variant="body2" sx={{ paddingTop: "10px", fontWeight: "bold" }}>
+                                        Or paste this secret key:
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            wordWrap: "break-word",
+                                            wordBreak: "break-all",
+                                            maxWidth: "90%",
+                                            paddingBottom: "10px",
+                                            fontSize: "0.75rem",
+                                            color: "#333",
+                                        }}
+                                    >
+                                        {totpSecretKey}
+                                    </Typography>
+                                </>
+                            )}
+                        </>
+                    )}
+                    <Typography variant="h5" sx={styles.title}>
+                        Enter 6-Digit Code
+                    </Typography>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                        {verificationCode.map((digit, index) => (
+                            <TextField
+                                key={index}
+                                variant="outlined"
+                                inputProps={{ maxLength: 1, style: { textAlign: "center" }, readOnly: true }}
+                                value={digit}
+                                onChange={(e) => handleVerificationInput(index, e.target.value)}
+                            />
+                        ))}
+                    </div>
+                    <div style={styles.keypad}>
+                        {[...Array(9).keys()].map((num) => (
+                            <Button
+                                key={num + 1}
+                                sx={styles.keyButton}
+                                variant="contained"
+                                onClick={() => handleVirtualKeyPress(String(num + 1))}
+                            >
+                                {num + 1}
+                            </Button>
+                        ))}
+                        <Button variant="contained" sx={styles.keyButton} onClick={() => handleVirtualKeyPress("0")}>
+                            0
+                        </Button>
+                        <Button variant="contained" sx={styles.deleteButton} onClick={handleDeletePress}>
+                            Delete
+                        </Button>
+                    </div>
+                    <Button
+                        variant="contained"
+                        onClick={isRegistering ? handleRegisterConfirmSignUp : handleLoginConfirmSignUp}
+                        sx={styles.verifyButton}
+                    >
+                        Verify
+                    </Button>
+                    {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
+                </Card>
+            </div>
+        );
     }
-  };
-
-  const handleLogin = async () => {
-    if (!email.trim()) {
-      alert("Email and password cannot be empty");
-      return;
-    }
-    try {
-      const data = await login(email, password);
-      setIsConfirming(true);
-    } catch (err) {
-      alert(err.error || "Login failed");
-    }
-  };
-
-  const handleVerificationInput = (index, value) => {
-    if (/^\d?$/.test(value)) {
-      const newCode = [...verificationCode];
-      newCode[index] = value;
-      setVerificationCode(newCode);
-    }
-  };
-
-  const handleVirtualKeyPress = (value) => {
-    const emptyIndex = verificationCode.findIndex((digit) => digit === "");
-    if (emptyIndex !== -1) {
-      handleVerificationInput(emptyIndex, value);
-    }
-  };
-
-  const handleDeletePress = () => {
-    const filledIndex = verificationCode.findLastIndex((digit) => digit !== "");
-    if (filledIndex !== -1) {
-      handleVerificationInput(filledIndex, "");
-    }
-  };
-
-  const handleLoginConfirmSignUp = async () => {
-    try {
-      const otp = verificationCode.join("");
-      await verify2FA(otp, email);
-      navigate("/home");
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  const handleRegisterConfirmSignUp = async () => {
-    try {
-      const otp = verificationCode.join("");
-      await verify2FA(otp, email);
-      // Reset state after successful registration
-      setIsSwapped(false);
-      setEmail("");
-      setPassword("");
-      setFirstName("");
-      setUsername("");
-      setLastName("");
-      setDob("");
-      setIsRegistering(false);
-      setIsConfirming(false);
-      setVerificationCode(["", "", "", "", "", ""]);
-      setQrCodeURL("");
-      settotpSecretKey("");
-      navigate("/home");
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      handleLogin();
-    }
-  };
-
-  if (isForgotPassword) {
-    return (
-      <ForgotPassw></ForgotPassw>)}
-
-  if (isConfirmingEmail){
-    return (
-    <div style={styles.wrapper}>
-        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
-        <Card sx={styles.confirmCard}>
-        <Typography variant="h4" sx={styles.title}>
-            Email Verification
-          </Typography>
-          <Typography variant="h5" sx={styles.title}>
-            Enter 6-Digit Code sent on Email
-          </Typography>
-          <div style={{ display: "flex", gap: "10px" }}>
-            {verificationCode.map((digit, index) => (
-              <TextField
-                key={index}
-                variant="outlined"
-                inputProps={{ maxLength: 1, style: { textAlign: "center" }, readOnly: true }}
-                value={digit}
-                onChange={(e) => handleVerificationInput(index, e.target.value)}
-              />
-            ))}
-          </div>
-          <div style={styles.keypad}>
-            {[...Array(9).keys()].map((num) => (
-              <Button
-                key={num + 1}
-                sx={styles.keyButton}
-                variant="contained"
-                onClick={() => handleVirtualKeyPress(String(num + 1))}
-              >
-                {num + 1}
-              </Button>
-            ))}
-            <Button variant="contained" sx={styles.keyButton} onClick={() => handleVirtualKeyPress("0")}>
-              0
-            </Button>
-            <Button variant="contained" sx={styles.deleteButton} onClick={handleDeletePress}>
-              Delete
-            </Button>
-          </div>
-          <Button variant="contained" onClick={ handleEmailVerification} sx={styles.verifyButton}>
-            Verify
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-  if (isConfirming) {
-    return (
-      <div style={styles.wrapper}>
-        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-        <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-      </div>
-        <Card sx={styles.confirmCard}>
-        <Typography variant="h4" sx={styles.title}>
-            2 Factor Authentication
-          </Typography>
-          <Typography variant="h5" sx={styles.title}>
-            Enter 6-Digit Code
-          </Typography>
-          <div style={{ display: "flex", gap: "10px" }}>
-            {verificationCode.map((digit, index) => (
-              <TextField
-                key={index}
-                variant="outlined"
-                inputProps={{ maxLength: 1, style: { textAlign: "center" }, readOnly: true }}
-                value={digit}
-                onChange={(e) => handleVerificationInput(index, e.target.value)}
-              />
-            ))}
-          </div>
-          <div style={styles.keypad}>
-            {[...Array(9).keys()].map((num) => (
-              <Button
-                key={num + 1}
-                sx={styles.keyButton}
-                variant="contained"
-                onClick={() => handleVirtualKeyPress(String(num + 1))}
-              >
-                {num + 1}
-              </Button>
-            ))}
-            <Button variant="contained" sx={styles.keyButton} onClick={() => handleVirtualKeyPress("0")}>
-              0
-            </Button>
-            <Button variant="contained" sx={styles.deleteButton} onClick={handleDeletePress}>
-              Delete
-            </Button>
-          </div>
-          <Button 
-            variant="contained" 
-            onClick={isRegistering ? handleRegisterConfirmSignUp : handleLoginConfirmSignUp} 
-            sx={styles.verifyButton}
-          >
-            Verify
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isRegistering) {
-    return (
-      <div style={styles.wrapper}>
-        <div style={{ position: "absolute", top: "20px", left: "20px" }}>
-          <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
-        </div>
-        <Card sx={styles.registerCard}>
-          <Typography variant="h5" sx={styles.title}>
-            Scan QR Code to Sign Up with Google
-          </Typography>
-          <img
-            src={qrCodeURL || "./G_Auth_QR_Code.png"}
-            alt="Google Auth QR"
-            style={{ width: "300px", height: "300px", marginBottom: "20px" }}
-          />
-          <Typography variant="body2" sx={{ paddingBottom: "10px" }}>
-            Use an Authenticator App to scan the QR code and then click NEXT.
-          </Typography>
-          <Typography variant="body2" sx={{ paddingBottom: "10px" }}>
-            OR  Paste this secret key in your Authenticator App and then click NEXT.
-          </Typography>
-          {totpSecretKey && (
-            <>
-              <Typography variant="body2" sx={{ paddingTop: "10px", fontWeight: "bold" }}>
-                TOTP URI:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  wordWrap: "break-word",
-                  wordBreak: "break-all",
-                  maxWidth: "90%",
-                  paddingBottom: "10px",
-                  fontSize: "0.75rem",
-                  color: "#333"
-                }}
-              >
-                {totpSecretKey}
-              </Typography>
-            </>
-          )}
-          <Button 
-            variant="contained" 
-            onClick={() => {
-              // Keep isRegistering true, and also set isConfirming to true
-              // This way we go to the verification screen but retain the registration flow
-              setIsConfirming(true);
-              // Make sure verification code is cleared
-              setVerificationCode(["", "", "", "", "", ""]);
-            }} 
-            sx={styles.actionButton}
-          >
-            Next
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-  
 
     return (
         <div style={styles.wrapper}>
@@ -338,48 +309,50 @@ function Auth() {
                 <img src="/logo.png" alt="Rivr." style={{ width: "125px" }} />
             </div>
 
-      <div style={{ display: "flex" }}>
-        <Card sx={isSwapped ? styles.swappedCard : styles.activeCard}>
-          {!isSwapped ? (
-            <>
-              <Typography variant="h4" sx={styles.title}>
-                Log In
-              </Typography>
-              <TextField
-                label="Email"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "10px" }}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
-              <TextField
-                label="Password"
-                type="password"
-                variant="outlined"
-                fullWidth
-                sx={{ marginBottom: "20px" }}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
-              <Button variant="contained" sx={styles.actionButton} onClick={handleLogin}>
-                Log In
-              </Button>
-              <Button variant="text" onClick={() => setIsForgotPassword(true)} sx={{ marginTop: "10px" }}>
-                Forgot Password?
-              </Button>
-            </>
-          ) : (
-            <>
-              <Typography variant="h6" sx={{ marginBottom: "15px", textAlign: "center" }}>
-                Already have an account?
-              </Typography>
-              <Button variant="outlined" onClick={handleSwap} sx={styles.swapButton}>
-                Log In
-              </Button>
-            </>
-          )}
-        </Card>
+            <div style={{ display: "flex" }}>
+                <Card sx={isSwapped ? styles.swappedCard : styles.activeCard}>
+                    {!isSwapped ? (
+                        <>
+                            <Typography variant="h4" sx={styles.title}>
+                                Log In
+                            </Typography>
+                            <TextField
+                                label="Email"
+                                variant="outlined"
+                                fullWidth
+                                sx={{ marginBottom: "10px" }}
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                            />
+                            <TextField
+                                label="Password"
+                                type="password"
+                                variant="outlined"
+                                fullWidth
+                                sx={{ marginBottom: "20px" }}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                            />
+                            <Button variant="contained" sx={styles.actionButton} onClick={handleLogin}>
+                                Log In
+                            </Button>
+                            <Button variant="text" onClick={() => setIsForgotPassword(true)} sx={{ marginTop: "10px" }}>
+                                Forgot Password?
+                            </Button>
+                        </>
+                    ) : (
+                            <>
+                                <Typography variant="h6" sx={{ marginBottom: "15px", textAlign: "center" }}>
+                                    Already have an account?
+                                </Typography>
+                                <Button variant="outlined" onClick={handleSwap} sx={styles.swapButton}>
+                                    Log In
+                                </Button>
+                            </>
+                        )}
+                </Card>
 
                 <Card sx={isSwapped ? styles.activeCard : styles.swappedCard}>
                     {!isSwapped ? (
@@ -396,7 +369,6 @@ function Auth() {
                                 <Typography variant="h4" sx={styles.title}>
                                     Register
                                 </Typography>
-
                                 <TextField
                                     label="Username"
                                     variant="outlined"
@@ -405,7 +377,6 @@ function Auth() {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                 />
-
                                 <TextField
                                     label="First Name"
                                     variant="outlined"
@@ -414,7 +385,6 @@ function Auth() {
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
                                 />
-
                                 <TextField
                                     label="Last Name"
                                     variant="outlined"
@@ -423,7 +393,6 @@ function Auth() {
                                     value={lastName}
                                     onChange={(e) => setLastName(e.target.value)}
                                 />
-
                                 <TextField
                                     label="Date of Birth"
                                     type="date"
@@ -434,7 +403,6 @@ function Auth() {
                                     value={dob}
                                     onChange={(e) => setDob(e.target.value)}
                                 />
-
                                 <TextField
                                     label="Email"
                                     type="email"
@@ -444,7 +412,6 @@ function Auth() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                 />
-
                                 <TextField
                                     label="Password"
                                     type="password"
@@ -454,7 +421,6 @@ function Auth() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
-
                                 <Button variant="contained" onClick={handleRegister} sx={styles.actionButton}>
                                     Register
                                 </Button>
@@ -462,6 +428,11 @@ function Auth() {
                         )}
                 </Card>
             </div>
+            {error && (
+                <Typography color="error" sx={{ mt: 2, textAlign: "center" }}>
+                    {error}
+                </Typography>
+            )}
         </div>
     );
 }

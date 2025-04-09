@@ -6,6 +6,7 @@ from decouple import config
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.db.models import Q, UniqueConstraint
 from django.utils import timezone
 
 # Generate a key for encryption
@@ -119,11 +120,17 @@ class Friendship(models.Model):
     is_accepted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
-        # Ensure user1 has a smaller ID to avoid duplicate mirrored friendships
-        if self.user.id > self.friend.id:
-            self.user, self.friend = self.friend, self.user2
-        super().save(*args, **kwargs)
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["user", "friend"],
+                name="unique_friendship",
+            ),
+            UniqueConstraint(
+                fields=["friend", "user"],
+                name="unique_friendship_mirror",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user} ↔ {self.friend}"

@@ -1,14 +1,13 @@
 import ast
 import base64
 import io
-from datetime import date, timedelta
 import random
+from datetime import date, timedelta
 
+import qrcode
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from decouple import config
-
-import qrcode
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.mail import message, send_mail
@@ -18,35 +17,21 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken, TokenError
-from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.tokens import (AccessToken, RefreshToken,
+                                             TokenError)
 
-from .models import (
-    Chat,
-    CustomUser,
-    Friendship,
-    Group,
-    GroupMessage,
-    MarketPlace,
-    Message,
-    VerificationCode,
-)
-from .serializers import (
-    ChatSerializer,
-    FriendshipSerializer,
-    GroupMessageSerializer,
-    GroupSerializer,
-    LoginSerializer,
-    MarketPlaceSerializer,
-    MessageSerializer,
-    RegisterSerializer,
-    TOTPVerificationSerializer,
-    UserProfileSerializer,
-    UserListSerializer,
-)
+from .models import (Chat, CustomUser, Friendship, Group, GroupMessage,
+                     MarketPlace, Message, VerificationCode)
+from .serializers import (ChatSerializer, FriendshipSerializer,
+                          GroupMessageSerializer, GroupSerializer,
+                          LoginSerializer, MarketPlaceSerializer,
+                          MessageSerializer, RegisterSerializer,
+                          TOTPVerificationSerializer, UserListSerializer,
+                          UserProfileSerializer)
 
 
 class RegisterView(APIView):
@@ -135,20 +120,15 @@ class LoginView(APIView):
 
             user = authenticate(request, username=email, password=password)
 
-            if user and user.is_verified and user.is_active:
-                refresh = RefreshToken.for_user(user)
+            if user and user.is_active:
+                if not user.is_verified:
+                    return Response(
+                        {"message": "Account not verified. Please set up 2FA.", "email": email},
+                        status=status.HTTP_200_OK,  # Prompt for 2FA setup if unverified
+                    )
                 return Response(
-                    {
-                        "refresh": str(refresh),
-                        "access": str(refresh.access_token),
-                        "email": user.email,  # Return email for 2FA verification
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            elif user and not user.is_verified:
-                return Response(
-                    {"error": "Account not verified. Please verify OTP."},
-                    status=status.HTTP_403_FORBIDDEN,
+                    {"message": "Please enter your 2FA code", "email": email},
+                    status=status.HTTP_200_OK,  # Prompt for 2FA
                 )
             return Response(
                 {"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
@@ -162,6 +142,9 @@ class VerifyEmailView(APIView):
     def post(self, request):
         code = request.data.get("otp")
         email = request.data.get("email")
+
+        print(code)
+        print(email)
 
         if not code or not email:
             return Response(
@@ -242,112 +225,75 @@ class VerifyEmailView(APIView):
 class FriendshipView(APIView):
     queryset = Friendship.objects.all()
     serializer_class = FriendshipSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.query_params.get("username")
-        if not user:
-            return Response(
-                {"error": "User is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        print(f"Looking up user: {user}")
-        user_instance = get_object_or_404(CustomUser, username=user)
-
-        friendships = self.queryset.filter(
-            friend__username=user_instance.username, is_accepted=False
-        )
-        print("Found friendships:", friendships)
-
+        username = request.user.username
+        # Only show incoming requests where user is the recipient (friend)
+        friendships = self.queryset.filter(friend__username=username, is_accepted=False)
         if not friendships.exists():
-            return Response(
-                {"detail": "No friendships found"}, status=status.HTTP_404_NOT_FOUND
-            )
-
+            return Response({"detail": "No friendships found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = self.serializer_class(friendships, many=True)
-        print("Serialized:", serializer.data)
+        print(f"Serialized friendships: {serializer.data}")
         return Response(serializer.data)
 
     def post(self, request):
-        """
-        Create a new friendship.
-        """
-        # print(request.data)
-        # print("Incoming data:", request.data)
+        print(f"Authenticated user: {request.user.username if request.user.is_authenticated else 'None'}")
         data = request.data.copy()
-        # print("Data after copy:", data)
+        data["user"] = request.user.username  # Force authenticated user
+        print("Data received for friendship:", data)
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             friendship = serializer.save()
-            return Response(
-                self.serializer_class(friendship).data, status=status.HTTP_201_CREATED
-            )
+            return Response(self.serializer_class(friendship).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request):
-        """
-        Accept a friendship request.
-        """
-        request_user = request.data.get("user")
-        friend_user = request.data.get("friend")
-        # print(friend_user, request_user)
-        if not request_user or not friend_user:
-            return Response(
-                {"error": "Both user and friend are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        serializer = self.serializer_class(data=request.data)
+        print("Data received for friendship update:", request.data)
+        print("Authenticated user:", request.user.username)
+        data = request.data.copy()
+        data["user"] = request.user.username
+        serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             try:
-                serializer.update_friendship(request.data)
-            except Friendship.DoesNotExist:
-                return Response(
-                    {"error": "Friendship does not exist."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            return Response(status=status.HTTP_204_NO_CONTENT)
+                serializer.update_friendship(serializer.validated_data)
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            except serializers.ValidationError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
-        """
-        Delete a friendship.
-        """
-        request_user = request.data.get("user")
+        request_user = request.user.username
         friend_user = request.data.get("friend")
-        if not request_user or not friend_user:
-            return Response(
-                {"error": "Both user and friend are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        serializer = self.serializer_class(data=request.data)
+        if not friend_user:
+            return Response({"error": "Friend username is required."}, status=status.HTTP_400_BAD_REQUEST)
+        data = {"user": request_user, "friend": friend_user}
+        serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             try:
-                serializer.delete(request.data)
+                serializer.delete(data)
             except Friendship.DoesNotExist:
-                return Response(
-                    {"error": "Friendship does not exist."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+                return Response({"error": "Friendship does not exist."}, status=status.HTTP_404_NOT_FOUND)
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
 class ChatListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.data.get("user")
-        user = get_object_or_404(CustomUser, username=user)
-        # Get all chats for the current user
+        user = request.user
         chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
         if not chats.exists():
-            return Response(
-                {"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "No chats found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = ChatSerializer(chats, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = ChatSerializer(data=request.data)
+        data = request.data.copy()
+        data["user1"] = request.user.username  # Force authenticated user as user1
+        serializer = ChatSerializer(data=data)
         if serializer.is_valid():
             chat = serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -358,190 +304,110 @@ class MessageView(APIView):
     queryset = Message.objects.all()
     dmserializer = MessageSerializer
     groupserializer = GroupMessageSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk=None, group=None):
-        sender_username = request.data.get("sender")
-        receiver_username = request.data.get("receiver")
+        sender_username = request.user.username
+        receiver_username = request.query_params.get("receiver")  # Use query param for receiver
 
         if pk is not None:
             group_obj = get_object_or_404(Group, pk=pk)
-
-            # Check sender permission
             if not group_obj.members.filter(username=sender_username).exists():
-                return Response(
-                    {"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN
-                )
-
-            # Get all messages for the group
-            messages = GroupMessage.objects.filter(group=group_obj).order_by(
-                "timestamp"
-            )
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            messages = GroupMessage.objects.filter(group=group_obj).order_by("timestamp")
             if not messages.exists():
-                    return Response(
-                    {"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND
-                )
-
+                return Response({"detail": "No messages found"}, status=status.HTTP_404_NOT_FOUND)
             serialized_messages = []
             for msg in messages:
                 try:
                     content = ast.literal_eval(msg.content)
-                    # Decrypt the message content
-                    decrypted = GroupMessage.decrypt_message(
-                        content["ciphertext"],
-                        content["signature"],
-                        msg.sender,
-                        group_obj,
-                    )
+                    decrypted = GroupMessage.decrypt_message(content["ciphertext"], content["signature"], msg.sender, group_obj)
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
-
                 message_data = GroupMessageSerializer(msg).data
                 message_data["decrypted_content"] = decrypted
                 serialized_messages.append(message_data)
-
             return Response(serialized_messages)
 
-        # If sender and receiver are provided (DM chat history)
-        if sender_username and receiver_username:
+        if receiver_username:
             try:
                 user = CustomUser.objects.get(username=sender_username)
                 receiver = CustomUser.objects.get(username=receiver_username)
             except CustomUser.DoesNotExist:
-                return Response(
-                    {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Get all messages between the two users
+                return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
             messages = Message.objects.filter(
-                (Q(sender=user) & Q(receiver=receiver))
-                | (Q(sender=receiver) & Q(receiver=user))
+                (Q(sender=user) & Q(receiver=receiver)) | (Q(sender=receiver) & Q(receiver=user))
             ).order_by("timestamp")
-
             response_data = []
-
             for msg in messages:
                 try:
                     content_dict = ast.literal_eval(msg.content)
-                    decrypted = Message.decrypt_message(
-                        content_dict["ciphertext"],
-                        content_dict["signature"],
-                        msg.sender,
-                        msg.receiver,
-                    )
+                    decrypted = Message.decrypt_message(content_dict["ciphertext"], content_dict["signature"], msg.sender, msg.receiver)
                 except Exception as e:
                     decrypted = f"Unable to decrypt message: {e}"
-
                 data = MessageSerializer(msg).data
                 data["decrypted_content"] = decrypted
                 response_data.append(data)
-
             return Response(response_data)
-
-        return Response({"detail": "Bad request"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Receiver required for DMs"}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
+        data = request.data.copy()
+        data["sender"] = request.user.username  # Force authenticated user as sender
         serializer = None
-
-        if request.data.get("sender") and request.data.get("group"):
-            serializer = GroupMessageSerializer(data=request.data)
-
-        elif request.data.get("sender") and request.data.get("receiver"):
-            serializer = MessageSerializer(data=request.data)
-
-        if serializer is not None:
+        if data.get("group"):
+            serializer = GroupMessageSerializer(data=data)
+        elif data.get("receiver"):
+            serializer = MessageSerializer(data=data)
+        if serializer:
             if serializer.is_valid():
                 message = serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(
-            {
-                "error": "Invalid request: sender and group or sender and receiver required."
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response({"error": "Invalid request: group or receiver required."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CombinedChatGroupView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.data.get("user")
-        user_instance = get_object_or_404(CustomUser, username=user)
-
-        chats = Chat.objects.filter(Q(user1=user_instance) | Q(user2=user_instance))
-        groups = Group.objects.filter(members=user_instance)
-
+        user = request.user
+        chats = Chat.objects.filter(Q(user1=user) | Q(user2=user))
+        groups = Group.objects.filter(members=user)
         if not (chats.exists() or groups.exists()):
-            return Response(
-                {"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "No chats or groups found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Fetch last messages for chats
         chat_last_messages = {}
         for chat in chats:
             last_message = chat.messages.order_by("-timestamp").first()
             if last_message:
-                chat_last_messages[chat.id] = {
-                    "content": last_message.content,
-                    "timestamp": last_message.timestamp.isoformat(),
-                }
+                chat_last_messages[chat.id] = {"content": last_message.content, "timestamp": last_message.timestamp.isoformat()}
 
-        # Fetch and decrypt last messages for groups
         group_last_messages = {}
         for group in groups:
             last_message = group.messages.order_by("-timestamp").first()
             if last_message:
                 decrypted_content = self.decrypt_group_message(last_message)
-                group_last_messages[group.id] = {
-                    "content": decrypted_content,
-                    "timestamp": last_message.timestamp.isoformat(),
-                }
+                group_last_messages[group.id] = {"content": decrypted_content, "timestamp": last_message.timestamp.isoformat()}
 
-        # Serialize both
         chat_serializer = ChatSerializer(chats, many=True)
         group_serializer = GroupSerializer(groups, many=True)
 
-        # Add last messages to serialized chats
         for chat_data in chat_serializer.data:
             chat_data["type"] = "chat"
-            chat_id = chat_data.get("id")
-            chat_data["id"] = chat_id
-            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get(
-                "content"
-            )
-            chat_data["last_message_timestamp"] = chat_last_messages.get(
-                chat_id, {}
-            ).get("timestamp")
+            chat_id = chat_data["id"]
+            chat_data["last_message"] = chat_last_messages.get(chat_id, {}).get("content")
+            chat_data["last_message_timestamp"] = chat_last_messages.get(chat_id, {}).get("timestamp")
 
-        # Add last messages to serialized groups
         for group_data in group_serializer.data:
             group_data["type"] = "group"
-            group_id = group_data.get("id")
-            group_data["id"] = group_id
-            group_data["last_message"] = group_last_messages.get(group_id, {}).get(
-                "content"
-            )
-            group_data["last_message_timestamp"] = group_last_messages.get(
-                group_id, {}
-            ).get("timestamp")
+            group_id = group_data["id"]
+            group_data["last_message"] = group_last_messages.get(group_id, {}).get("content")
+            group_data["last_message_timestamp"] = group_last_messages.get(group_id, {}).get("timestamp")
 
-        # Combine and sort
         combined_list = chat_serializer.data + group_serializer.data
-        sorted_list = sorted(
-            combined_list,
-            key=lambda x: x.get("last_message_timestamp") or "",
-            reverse=True,
-        )
-
-        return Response(
-            {
-                "results": sorted_list,
-                "chat_count": len(chat_serializer.data),
-                "group_count": len(group_serializer.data),
-            }
-        )
+        sorted_list = sorted(combined_list, key=lambda x: x.get("last_message_timestamp") or "", reverse=True)
+        return Response({"results": sorted_list, "chat_count": len(chat_serializer.data), "group_count": len(group_serializer.data)})
 
     def decrypt_group_message(self, group_message):
         try:
@@ -552,11 +418,7 @@ class CombinedChatGroupView(APIView):
             )
             plain_text = private_key.decrypt(
                 ciphertext,
-                padding.OAEP(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None,
-                ),
+                padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
             )
             return plain_text.decode()
         except Exception as e:
@@ -564,73 +426,74 @@ class CombinedChatGroupView(APIView):
 
 
 class GroupCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.data.get("user")
-
-        user_instance = get_object_or_404(CustomUser, username=user)
-        # Get all groups for the current user
-        groups = Group.objects.filter(members=user_instance)
+        user = request.user
+        groups = Group.objects.filter(members=user)
         if not groups.exists():
-            return Response(
-                {"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "No groups found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = GroupSerializer(data=request.data)
+        data = request.data.copy()
+        serializer = GroupSerializer(data=data)
         if serializer.is_valid():
             group = serializer.save()
+            group.members.add(request.user)  # Ensure creator is a member
             return Response(GroupSerializer(group).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
 class GroupDetailView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
+        if not group.members.filter(username=request.user.username).exists():
+            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
         serializer = GroupSerializer(group)
         return Response(serializer.data)
 
     def put(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
+        if not group.members.filter(username=request.user.username).exists():
+            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
         serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
             group = serializer.update(group, request.data)
             return Response(GroupSerializer(group).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # delete member from group
     def delete(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
+        if not group.members.filter(username=request.user.username).exists():
+            return Response({"detail": "Not a member of this group"}, status=status.HTTP_403_FORBIDDEN)
         serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
             group = serializer.remove_member_by_name(group, request.data.get("member"))
             return Response(GroupSerializer(group).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# List and Create View
 class MarketPlaceListCreateView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # List all marketplace items
         items = self.queryset.all()
         serializer = self.serializer_class(items, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        # Create a new marketplace item
-        print(request.data)
-        serializer = self.serializer_class(data=request.data)
+        data = request.data.copy()
+        data["created_by"] = request.user.username  # Force authenticated user
+        serializer = self.serializer_class(data=data)
         if serializer.is_valid():
-            print("Valid data:", serializer.validated_data)
-            item = serializer.save(created_by=request.data.get("created_by"))
+            item = serializer.save(created_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -638,55 +501,46 @@ class MarketPlaceListCreateView(APIView):
 class MarketPlaceDetailView(APIView):
     queryset = MarketPlace.objects.all()
     serializer_class = MarketPlaceSerializer
-    permission_classes = [AllowAny]  # Allow read for all, write for authenticated
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
-        """Helper method to get the object with permission check"""
         obj = get_object_or_404(MarketPlace, pk=pk)
-        if self.request.data.get("created_by") != obj.created_by.username:
+        if request.user.username != obj.created_by.username:
             raise PermissionDenied("You can only modify your own marketplace items")
         return obj
 
     def put(self, request, pk):
-        """Update a marketplace item"""
         instance = self.get_object(pk)
-        serializer = MarketPlaceSerializer(
-            instance,
-            data=request.data,
-            partial=True,  # Allow partial updates
-            context={"request": request},
-        )
-        print("Updating item:", request.data)
+        serializer = MarketPlaceSerializer(instance, data=request.data, partial=True, context={"request": request})
         if serializer.is_valid():
-            print("Valid data:", serializer.validated_data)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        # Added explicit return for invalid case
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        # Ensure only the creator can delete
-        instance = get_object_or_404(self.queryset, pk=pk)
-        if request.data.get("created_by") != instance.created_by.username:
-            raise PermissionDenied("You can only delete your own marketplace items")
+        instance = self.get_object(pk)
         instance.delete()
         return Response({"Status: success"}, status=status.HTTP_204_NO_CONTENT)
 
 
 class UserMarketPlaceListView(APIView):
     serializer_class = MarketPlaceSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get(self):
-        # Return only the items created by the current user
-        return MarketPlace.objects.filter(created_by=self.request.user)
+    def get(self, request):  # Added request parameter
+        items = MarketPlace.objects.filter(created_by=request.user)
+        serializer = self.serializer_class(items, many=True)
+        return Response(serializer.data)
 
 
 class AvailableMarketPlaceListView(APIView):
     serializer_class = MarketPlaceSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get(self):
-        # Return only unsold items
-        return MarketPlace.objects.filter(is_sold=False)
+    def get(self, request):  # Added request parameter
+        items = MarketPlace.objects.filter(is_sold=False)
+        serializer = self.serializer_class(items, many=True)
+        return Response(serializer.data)
 
 
 class VerifyTOTPView(APIView):
@@ -728,7 +582,6 @@ class VerifyTOTPView(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -882,32 +735,20 @@ class ResetPasswordView(APIView):
 
 
 class ListUserView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
-            # Get all active users
-            active_users = CustomUser.objects.filter(is_active=True)
-
-            # Serialize the users using UserListSerializer
-            serializer = UserListSerializer(
-                active_users, many=True, context={"request": request}
-            )
-
-            return Response(
-                {"users": serializer.data, "count": active_users.count()},
-                status=status.HTTP_200_OK,
-            )
-
+            active_users = CustomUser.objects.filter(is_active=True).exclude(id=request.user.id)
+            serializer = UserListSerializer(active_users, many=True, context={"request": request})
+            return Response({"users": serializer.data, "count": active_users.count()}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response(
-                {"error": f"Failed to fetch users: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return Response({"error": f"Failed to fetch users: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class UserProfileView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, user_id=None):
         try:

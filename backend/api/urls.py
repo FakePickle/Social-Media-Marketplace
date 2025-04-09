@@ -1,26 +1,13 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
-from .views import (
-    AvailableMarketPlaceListView,
-    LoginView,
-    MarketPlaceDetailView,
-    MarketPlaceListCreateView,
-    RegisterView,
-    MessageView,
-    GroupCreateView,
-    GroupDetailView,
-    FriendshipView,
-    CombinedChatGroupView,
-    UserMarketPlaceListView,
-    VerifyEmailView,
-    VerifyTOTPView,
-    RequestPasswordResetView,
-    VerifyPasswordResetView,
-    ResetPasswordView,
-    UserProfileView,
-    ListUserView,
-)
+from .views import (AvailableMarketPlaceListView, CombinedChatGroupView,
+                    FriendshipView, GroupCreateView, GroupDetailView,
+                    ListUserView, LoginView, MarketPlaceDetailView,
+                    MarketPlaceListCreateView, MessageView, RegisterView,
+                    RequestPasswordResetView, ResetPasswordView,
+                    UserMarketPlaceListView, UserProfileView, VerifyEmailView,
+                    VerifyPasswordResetView, VerifyTOTPView)
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -46,14 +33,8 @@ urlpatterns = [
     path("user/profile/", UserProfileView.as_view(), name="current-user-profile"),
     path("user/profile/<int:user_id>/", UserProfileView.as_view(), name="user-profile"),
     path("messages/", MessageView.as_view(), name="messages"),
-    path("messages/<int:pk>/", MessageView.as_view(), name="message-detail"),
     path("groups/", GroupCreateView.as_view(), name="create-group"),
     path("groups/<int:pk>/", GroupDetailView.as_view(), name="group-detail"),
-    path(
-        "friendships/<str:username>/",
-        FriendshipView.as_view(),
-        name="friendship-detail",
-    ),
     path("friendships/", FriendshipView.as_view(), name="friendship-list-create"),
     path("friendships/accept/", FriendshipView.as_view(), name="friendship-accept"),
     path("friendships/delete/", FriendshipView.as_view(), name="friendship-delete"),

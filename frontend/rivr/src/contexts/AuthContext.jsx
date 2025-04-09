@@ -4,144 +4,123 @@ import api, { updateTokens, clearTokens } from '../utils/api';
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('userData')) || null);
+    const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('accessToken'));
+    const [isLoading, setIsLoading] = useState(true);
+    const [userData, setUserData] = useState(JSON.parse(localStorage.getItem('userData')) || null);
 
-  useEffect(() => {
-    const validateToken = async () => {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
+    // Validate token on mount
+    useEffect(() => {
+        const validateToken = async () => {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                setIsAuthenticated(false);
+                setIsLoading(false);
+                return;
+            }
 
-      try {
-        // Verify token with backend
-        await api.get('verify-token/');
-        setIsAuthenticated(true);
-      } catch (error) {
-        // Token is invalid or expired
-        clearTokens();
-        localStorage.removeItem('userData');
-        setUserData(null);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
+            try {
+                const { data } = await api.get('user/profile/');
+                setIsAuthenticated(true);
+                saveUserData(data); // Refresh user data
+            } catch (error) {
+                clearTokens();
+                localStorage.removeItem('userData');
+                setUserData(null);
+                setIsAuthenticated(false);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        validateToken();
+    }, []);
+
+    // Save user data to localStorage
+    const saveUserData = (data) => {
+        localStorage.setItem('userData', JSON.stringify(data));
+        setUserData(data);
     };
 
-    validateToken();
-  }, []);
-
-  // Function to save user data to localStorage
-  const saveUserData = (data) => {
-    localStorage.setItem('userData', JSON.stringify(data));
-    setUserData(data);
-  };
-
-  const login = async (email, password) => {
-    try {
-      const { data } = await api.post("login/", { email, password });
-      
-      // Only update tokens after 2FA verification, not here
-      // Just store the email for 2FA verification
-      localStorage.setItem('pendingAuthEmail', email);
-      
-      return data;
-    } catch (error) {
-      setIsAuthenticated(false);
-      throw error.response?.data || { error: "Login failed" };
-    }
-  };
-
-  const logout = () => {
-    const refresh = localStorage.getItem("refreshToken");
-    if (refresh) {
-      api.post("token/blacklist/", { refresh }).catch(() => {});
-    }
-    clearTokens();
-    localStorage.removeItem('userData');
-    setUserData(null);
-    setIsAuthenticated(false);
-  };
-
-  const register = async (email, username, password, first_name, last_name, dob) => {
-    try {
-      const { data } = await api.post("register/", { 
-        email, 
-        username, 
-        password, 
-        first_name, 
-        last_name, 
-        dob 
-      });
-      return data; // This returns message and verify-endpoint, not QR code
-    } catch (error) {
-      throw error.response?.data || { error: "Register failed" };
-    }
-  };
-
-  const verifyEmail = async (otp, email) => {
-    try {
-      const response = await api.post("verify-email/", {
-        otp,
-        email
-      });
-      // This returns the QR code, secret key, and TOTP URI
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { error: error.message || "Verification failed." };
-    }
-  };
-
-  const verify2FA = async (totp_code, email) => {
-    try {
-      const response = await api.post("verify-2fa/", {
-        totp_code,
-        email
-      });
-
-      if (response.data.access && response.data.refresh) {
-        updateTokens(response.data.access, response.data.refresh);
-        setIsAuthenticated(true);
-        
-        // Save user data if available in response
-        if (response.data.user) {
-          saveUserData(response.data.user);
-        } else {
-          // If user data not provided in response, fetch it separately
-          try {
-            const userResponse = await api.get('users/profile/');
-            saveUserData(userResponse.data);
-          } catch (err) {
-            console.error('Failed to fetch user data:', err);
-          }
+    const login = async (email, password) => {
+        try {
+            const { data } = await api.post('login/', { email, password });
+            localStorage.setItem('pendingAuthEmail', email); // Store for 2FA
+            return data; // { message: "Please enter your 2FA code", email }
+        } catch (error) {
+            setIsAuthenticated(false);
+            throw error.response?.data || { error: 'Login failed' };
         }
-      }
+    };
 
-      return response.data;
-    } catch (error) {
-      setIsAuthenticated(false);
-      throw error.response?.data || { error: error.message || "2FA verification failed." };
-    }
-  };
+    const logout = () => {
+        const refresh = localStorage.getItem('refreshToken');
+        if (refresh) {
+            api.post('token/blacklist/', { refresh }).catch(() => {});
+        }
+        clearTokens();
+        localStorage.removeItem('userData');
+        localStorage.removeItem('pendingAuthEmail');
+        setUserData(null);
+        setIsAuthenticated(false);
+    };
 
-  return (
-    <AuthContext.Provider value={{ 
-      login, 
-      logout, 
-      register, 
-      verifyEmail, 
-      verify2FA, 
-      isAuthenticated, 
-      setIsAuthenticated,
-      isLoading,
-      userData,
-      setUserData: saveUserData
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
+    const register = async (email, username, password, first_name, last_name, dob) => {
+        try {
+            const { data } = await api.post('register/', {
+                email,
+                username,
+                password,
+                first_name,
+                last_name,
+                dob,
+            });
+            return data; // { message, email, code }
+        } catch (error) {
+            throw error.response?.data || { error: 'Register failed' };
+        }
+    };
+
+    const verifyEmail = async (otp, email) => {
+        try {
+            const { data } = await api.post('verify-email/', { otp, email });
+            return data; // { message, qr_code, secret_key, totp_uri }
+        } catch (error) {
+            throw error.response?.data || { error: error.message || 'Email verification failed' };
+        }
+    };
+
+    const verify2FA = async (totp_code, email) => {
+        try {
+            const { data } = await api.post('verify-2fa/', { totp_code, email });
+            if (data.access && data.refresh) {
+                updateTokens(data.access, data.refresh);
+                setIsAuthenticated(true);
+                localStorage.removeItem('pendingAuthEmail');
+                saveUserData(data.user);
+            }
+            return data; // { message, access, refresh, user }
+        } catch (error) {
+            setIsAuthenticated(false);
+            throw error.response?.data || { error: error.message || '2FA verification failed' };
+        }
+    };
+
+    return (
+        <AuthContext.Provider
+            value={{
+                login,
+                logout,
+                register,
+                verifyEmail,
+                verify2FA,
+                isAuthenticated,
+                setIsAuthenticated,
+                isLoading,
+                userData,
+                setUserData: saveUserData,
+            }}
+        >
+            {children}
+        </AuthContext.Provider>
+    );
 };
-
